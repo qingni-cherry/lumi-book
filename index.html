@@ -1,0 +1,2429 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lumi and the Little Grey Cloud</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Baloo+2:wght@600;800&family=Caveat:wght@600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --ink: #3b2a1e; --paper: #fbf3e2; --accent: #e8742a; --hl: #ffd36b; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1d1830; color: var(--ink); font-family: ui-rounded, "Avenir Next", system-ui, sans-serif; }
+  canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; display: block; cursor: grab; touch-action: none; }
+  canvas.dragging { cursor: grabbing; }
+
+  /* left: progress line + story card */
+  #panel { position: fixed; left: 32px; top: 50%; transform: translateY(-50%); width: 500px; display: flex; gap: 24px; pointer-events: none; }
+  #track { position: relative; width: 5px; height: 440px; background: rgba(251,243,226,.25); border-radius: 3px; flex: none; }
+  #fill { position: absolute; inset: 0; background: var(--accent); border-radius: 3px; transform-origin: top; transform: scaleY(0); }
+  .dot { position: absolute; left: 50%; width: 20px; height: 20px; margin: -10px 0 0 -10px; border-radius: 50%; background: var(--paper); border: 3px solid rgba(59,42,30,.35); pointer-events: auto; cursor: pointer; transition: border-color .3s, transform .3s; }
+  .dot.on { border-color: var(--accent); transform: scale(1.15); }
+  /* the story card. Three looks to compare (🃏 button): torn note, sticker, riso print */
+  #cardwrap { position: relative; align-self: center; flex: 1; transition: transform .5s; }
+  #card { position: relative; padding: 34px 38px 22px; pointer-events: auto; transition: opacity .45s, transform .45s; }
+  #card.hide { opacity: 0; transform: translateY(10px); }
+  #c-text { margin: 0; font: 400 25px/1.8 "Andika", "Avenir Next", sans-serif; color: #2b2433; }
+  .w { border-radius: 9px; padding: 1px 4px; margin: 0 -2px; transition: background .35s, background-size .3s ease-out, color .25s, box-shadow .35s, transform .25s; cursor: default; }
+  .w.link { cursor: pointer; text-decoration: underline dotted 2.5px rgba(214,140,60,.75); text-underline-offset: 7px; }
+  /* the reading highlight (same on every card): a warm yellow pill that lifts a little; the word just read fades behind it */
+  .w.on { background: #ffd56e; box-shadow: 0 3px 0 #e8a93c; transform: translateY(-1px); text-decoration-color: transparent; }
+  .w.past { background: rgba(255,213,110,.45); }
+  #read:focus { outline: none; } #read:focus-visible { outline: 3px solid rgba(232,116,42,.5); outline-offset: 3px; }
+
+  /* 1 · torn note: a page torn from a sketchbook, taped on, handwritten heading, marker highlight */
+  .card-torn #cardwrap { transform: rotate(-1.2deg); filter: drop-shadow(0 14px 18px rgba(0,0,0,.4)); }
+  .card-torn #cardwrap::before { content: ''; position: absolute; z-index: 2; top: -14px; left: 50%; width: 130px; height: 32px; transform: translateX(-50%) rotate(2.5deg);
+    background: repeating-linear-gradient(45deg, rgba(232,116,42,.6) 0 9px, rgba(242,169,59,.6) 9px 18px); box-shadow: 0 1px 3px rgba(0,0,0,.2); }
+  .card-torn #card { background: url(assets/tex-paper-v2.png) center / 520px, #f6ecd6; clip-path: var(--torn); padding-top: 40px; }
+  .card-torn #card small { font: 600 21px "Caveat", cursive; color: #a0612c; letter-spacing: .04em; }
+  .card-torn #card h2 { margin: 0 0 12px; font: 700 44px/1.05 "Caveat", cursive; color: #8a4a1f; }
+  .card-torn #read { font: 700 26px "Caveat", cursive; background: #e8742a; border-radius: 8px 16px 10px 14px; transform: rotate(-1deg); box-shadow: 0 4px 0 #b9541a; }
+
+  /* 2 · sticker: a fat die-cut sticker with a white border, bouncy purple highlight */
+  .card-sticker #cardwrap { transform: rotate(1deg); }
+  .card-sticker #card { background: #fff3df; border-radius: 30px; border: 8px solid #fff; box-shadow: 0 0 0 1.5px rgba(0,0,0,.08), 0 16px 32px rgba(0,0,0,.38); }
+  .card-sticker #card small { display: inline-block; font: 800 13px "Baloo 2", sans-serif; letter-spacing: .14em; color: #fff; background: #e8742a; padding: 3px 12px 1px; border-radius: 999px; }
+  .card-sticker #card h2 { margin: 8px 0 12px; font: 800 34px/1.15 "Baloo 2", sans-serif; color: #e8742a; text-shadow: 2px 2px 0 #fff, 4px 4px 0 rgba(155,107,214,.25); }
+  .card-sticker #read { font: 800 18px "Baloo 2", sans-serif; background: #9b6bd6; box-shadow: 0 4px 0 #6d47a3, 0 8px 16px rgba(109,71,163,.3); }
+
+  /* 3 · riso print: grainy two-colour print (blue + fluorescent pink), slightly off-register title */
+  .card-riso #card { border-radius: 4px; border: 2px solid #0078bf; box-shadow: 7px 7px 0 #ff48b0, 0 16px 30px rgba(0,0,0,.3);
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 .3 0 0 0 0 .55 0 0 0 .22 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E"), #f3ead8; }
+  .card-riso #card small { font: 800 13px "Baloo 2", sans-serif; letter-spacing: .26em; color: #ff48b0; }
+  .card-riso #card h2 { margin: 2px 0 12px; font: 800 36px/1.1 "Baloo 2", sans-serif; color: #0078bf; text-shadow: 3px 2px 0 rgba(255,72,176,.8); }
+  .card-riso #c-text { color: #1b3f86; }
+  .card-riso #read { font: 800 18px "Baloo 2", sans-serif; background: #0078bf; color: #f3ead8; border-radius: 4px; box-shadow: 4px 4px 0 #ff48b0; }
+  /* 4 · rainy-day: this book's own look. Cream card, rounded, slate-blue heading, soft-yellow reading pill, dotted blue underlines */
+  .card-rain #cardwrap { transform: none; filter: drop-shadow(0 12px 22px rgba(40,60,90,.28)); }
+  .card-rain #card { background: #fbf6ea; border-radius: 22px; border: 2px solid rgba(91,113,134,.35); padding: 30px 36px 22px; }
+  .card-rain #card small { font: 600 18px "Caveat", cursive; color: #7b8ea3; letter-spacing: .1em; text-transform: uppercase; }
+  .card-rain #card h2 { margin: 2px 0 10px; font: 700 40px/1.1 "Caveat", cursive; color: #4e6a85; }
+  .card-rain #c-text { color: #3b3a44; font-size: 24px; }
+  .card-rain .w.link { text-decoration-color: rgba(91,113,134,.7); }
+  .card-rain .w.on { background: #ffe08a; box-shadow: 0 3px 0 #e6c15a; }
+  .card-rain .w.past { background: rgba(255,224,138,.45); }
+  .card-rain #read { font: 700 22px "Caveat", cursive; background: #5b7186; color: #fff8e8; border-radius: 999px; box-shadow: 0 4px 0 #3f5266, 0 8px 16px rgba(63,82,102,.25); transform: none; }
+  .card-rain #c-hint { border-top-color: rgba(91,113,134,.25); color: #8a97a6; }
+  #c-hint { margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(160,120,70,.3); font: 400 14px "Andika", sans-serif; color: #9a7f63; letter-spacing: .03em; }
+  /* the word list at the end: word cards (THING / ACTION tag, a Codex picture, the word, 中文, the sentence from the book) */
+  #wordlist { position: fixed; left: 50%; top: 50%; width: min(1120px, 94vw); max-height: 90vh; overflow: auto; padding: 18px 26px 16px; background: #fbf6ea;
+    border: 2px solid rgba(91,113,134,.35); border-radius: 26px; box-shadow: 0 18px 40px rgba(40,60,90,.3); font-family: "Andika", sans-serif;
+    transform: translate(-50%, -46%); opacity: 0; transition: transform .6s, opacity .6s; z-index: 40; }
+  #wordlist.show { transform: translate(-50%, -50%); opacity: 1; }
+  #wordlist[hidden] { display: none; }
+  #wordlist h3 { margin: 0 0 4px; font: 700 38px "Caveat", cursive; color: #4e6a85; text-align: center; }
+  #wordlist h4 { margin: 10px 0 12px; font: 700 13px "Andika", sans-serif; letter-spacing: .14em; color: #8a97a6; }
+  #wordlist ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px 12px; }
+  #wordlist li { position: relative; background: #fff; border-radius: 16px; padding: 12px 8px 10px; cursor: pointer; text-align: center;
+    box-shadow: 0 2px 0 rgba(91,113,134,.18), 0 6px 14px rgba(40,60,90,.1); transition: transform .2s, box-shadow .2s; }
+  #wordlist li:hover { transform: translateY(-3px); box-shadow: 0 4px 0 rgba(91,113,134,.2), 0 10px 20px rgba(40,60,90,.16); }
+  #wordlist li .tag { position: absolute; top: -9px; left: 10px; font: 700 11px "Andika", sans-serif; letter-spacing: .08em; padding: 2px 9px; border-radius: 999px; }
+  #wordlist li .tag.n { background: #ffe08a; color: #7a5a10; } #wordlist li .tag.v { background: #cfdcea; color: #3f5266; }
+  #wordlist li img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 11px; display: block; background: #fbf3e2; }
+  #wordlist li b { display: block; margin-top: 6px; font: 700 25px/1 "Caveat", cursive; color: #3b3a44; }
+  #wordlist li .zh { display: block; font-size: 14px; color: #7b8ea3; margin-top: 3px; }
+  #wordlist li .ex { margin-top: 7px; padding-top: 6px; border-top: 1px dashed rgba(91,113,134,.3); font-size: 12.5px; line-height: 1.35; color: #5a5a66; }
+  #wordlist li .ex em { font-style: normal; background: #ffe08a; border-radius: 4px; padding: 0 2px; color: #3b3a44; }
+  #wordlist .wl-hint { margin-top: 14px; font-size: 13px; color: #8a97a6; text-align: center; }
+  #wordlist .wl-close { position: absolute; top: 12px; right: 16px; border: 0; background: none; font-size: 30px; line-height: 1; color: #8a97a6; cursor: pointer; }
+  @media (max-width: 900px) { #wordlist ul { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px) { #wordlist ul { grid-template-columns: repeat(2, 1fr); } }
+  .card-riso #c-hint { border-top-color: rgba(0,120,191,.3); color: #4b6fa8; }
+  #read { margin-top: 16px; border: 0; border-radius: 999px; padding: 11px 24px 9px; font: 800 18px "Baloo 2", sans-serif; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 4px 0 #b9541a, 0 8px 16px rgba(232,116,42,.3); }
+  #read[hidden] { display: none; }
+
+  /* page buttons */
+  #stars { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 6px; padding: 6px 14px; border-radius: 999px;
+           background: rgba(30,20,40,.45); backdrop-filter: blur(4px); font-size: 22px; color: rgba(255,255,255,.28); z-index: 6; }
+  #stars span { transition: color .3s, transform .3s, text-shadow .3s; }
+  #stars span.got { color: #ffd56e; text-shadow: 0 0 10px rgba(255,200,90,.8); animation: starpop .6s; }
+  @keyframes starpop { 40% { transform: scale(1.7) rotate(20deg); } }
+  #pagehint { position: fixed; left: 50%; bottom: 104px; transform: translate(-50%, 10px); padding: 9px 18px; border-radius: 999px; font: 600 15px "Andika", sans-serif;
+              color: #3b2a1e; background: rgba(255,246,228,.92); box-shadow: 0 6px 18px rgba(0,0,0,.25); opacity: 0; pointer-events: none; transition: opacity .5s, transform .5s; z-index: 6; }
+  #pagehint.show { opacity: 1; transform: translate(-50%, 0); animation: nudge 2.4s ease-in-out infinite; }
+  @keyframes nudge { 50% { transform: translate(calc(-50% + 8px), 0); } }
+  /* vocabulary tags: the English word pops up over its picture */
+  #tags { position: fixed; inset: 0; pointer-events: none; z-index: 5; }
+  .vtag { position: absolute; transform: translate(-50%, -100%); padding: 7px 18px 5px; border-radius: 14px; white-space: nowrap;
+          font: 700 24px "Andika", sans-serif; color: #2b2433; background: #fff6e2;
+          outline: 2px dashed rgba(201,140,70,.75); outline-offset: -6px; box-shadow: 0 3px 0 #e2c48f, 0 8px 18px rgba(0,0,0,.3);
+          animation: tagpop .55s cubic-bezier(.3,1.7,.5,1); transition: opacity .4s; }
+  .vtag::after { content: ''; position: absolute; left: 50%; bottom: -9px; margin-left: -9px; border: 9px solid transparent; border-bottom: 0; border-top-color: #fff6e2; }
+  .vtag.out { opacity: 0; transition: opacity .8s; }
+  @keyframes tagpop { from { transform: translate(-50%, -60%) scale(.3); opacity: 0; } }
+  #flash { position: fixed; inset: 0; pointer-events: none; z-index: 4; opacity: 0; background: radial-gradient(circle at 60% 45%, rgba(255,240,200,.9), rgba(255,210,140,.35) 40%, transparent 70%); }
+  #flash.go { animation: flash 1.1s ease-out; }
+  @keyframes flash { 12% { opacity: 1; } 100% { opacity: 0; } }
+  #nav { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); display: flex; gap: 16px; }
+  /* page buttons: little paper discs with a stitched ring and a drawn arrow */
+  #nav button { position: relative; width: 66px; height: 66px; border-radius: 50%; border: 0; cursor: pointer; display: grid; place-items: center;
+    background: radial-gradient(circle at 35% 30%, #fffaf0, #f3e4c6 70%, #e9d3ab); color: #6b3f22;
+    box-shadow: inset 0 0 0 5px rgba(255,250,238,.7), inset 0 -3px 6px rgba(150,100,50,.18), 0 5px 0 #c99b62, 0 10px 22px rgba(0,0,0,.35);
+    transition: transform .2s cubic-bezier(.3,1.6,.5,1), box-shadow .2s, opacity .3s; }
+  #nav button::before { content: ''; position: absolute; inset: 8px; border-radius: 50%; border: 2px dashed rgba(201,140,70,.75); }
+  #nav button svg { width: 30px; height: 30px; }
+  #nav #prev svg { transform: scaleX(-1); }
+  #nav button:hover { transform: translateY(-3px) rotate(-4deg); }
+  #nav #next:hover { transform: translateY(-3px) rotate(4deg); }
+  #nav button:active { transform: translateY(3px) scale(.96); box-shadow: inset 0 0 0 5px rgba(255,250,238,.7), 0 2px 0 #c99b62, 0 5px 12px rgba(0,0,0,.3); }
+  #nav button:disabled { opacity: .35; cursor: default; transform: none; }
+  #nav button:focus { outline: none; }
+
+  /* testing helpers */
+  #fx { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 5; }
+  #hud { position: fixed; right: 16px; bottom: 16px; display: flex; gap: 8px; align-items: center; font: 12px ui-monospace, monospace; }
+  #hud button { font: 700 13px "Baloo 2", sans-serif; border: 0; border-radius: 999px; padding: 7px 14px 5px; cursor: pointer; color: #6b3f22;
+    background: linear-gradient(#fffaf0, #f1e1c2); box-shadow: inset 0 0 0 1.5px rgba(201,140,70,.45), 0 3px 0 #c99b62, 0 6px 14px rgba(0,0,0,.3);
+    transition: transform .2s cubic-bezier(.3,1.6,.5,1); }
+  #hud button:hover { transform: translateY(-2px); } #hud button:active { transform: translateY(2px); }
+  #pval { background: rgba(251,243,226,.7); padding: 6px 10px; border-radius: 999px; }
+  #credit { position: fixed; left: 16px; bottom: 10px; font-size: 11px; color: var(--paper); opacity: .5; }
+  #hint { position: fixed; left: 50%; top: 20px; transform: translateX(-50%); font-size: 14px; color: var(--paper); opacity: .75; transition: opacity .5s; pointer-events: none; }
+
+  @media (max-width: 760px) {
+    #panel { top: auto; bottom: 100px; left: 16px; right: 16px; transform: none; width: auto; gap: 14px; }
+    #track { height: 150px; }
+    #card { padding: 20px 20px 14px; } .card-torn #card h2 { font-size: 28px; }
+    #card h2 { font-size: 20px; margin-bottom: 6px; } #c-text { font-size: 16px; line-height: 1.65; } #c-hint { display: none; }
+    #read { margin-top: 10px; padding: 8px 16px; font-size: 14px; }
+    #nav { bottom: 20px; } #nav button { width: 56px; height: 56px; }
+    #hud { top: 12px; bottom: auto; right: 12px; }
+    #hint { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="panel">
+  <div id="track"><div id="fill"></div></div>
+  <div id="cardwrap"><div id="card"><small id="c-num"></small><h2 id="c-title"></h2><p id="c-text"></p><button id="read" hidden>▶ Read to me</button><div id="c-hint">tap an underlined word · tap a picture to play</div></div></div>
+</div>
+<div id="wordlist" hidden><button class="wl-close" aria-label="Close">×</button><h3>Words we learned</h3><h4>THINGS</h4><ul class="wl-n"></ul><h4>ACTIONS</h4><ul class="wl-v"></ul><div class="wl-hint">tap a card to see it in the story again</div></div>
+<div id="stars" title="a star for every page read to the end"></div>
+<div id="pagehint"></div>
+<div id="flash"></div>
+<div id="tags"></div>
+<div id="nav"><button id="prev" aria-label="Previous page"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16.5c6-.6 14-.4 21-.5"/><path d="M18.5 8.5c2.6 2.7 5 5.1 7.5 7.5-2.5 2.6-4.9 5-7.6 7.6"/></svg></button><button id="next" aria-label="Next page"><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 16.5c6-.6 14-.4 21-.5"/><path d="M18.5 8.5c2.6 2.7 5 5.1 7.5 7.5-2.5 2.6-4.9 5-7.6 7.6"/></svg></button></div>
+<canvas id="fx"></canvas>
+<div id="hud"><span id="pval">p = 0.00</span><button id="cardstyle">🃏 torn</button><button id="trail">✨ fireflies</button><button id="snd">🔇 sound</button></div>
+<div id="hint">← → to turn · ▶ Read · tap a picture or an underlined word · drag to look around</div>
+<div id="credit">Lumi and the Little Grey Cloud · test run</div>
+
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js",
+            "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { clone as cloneRigged } from 'three/addons/utils/SkeletonUtils.js';
+import { makeFace } from './lumi-face.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { MarchingCubes } from 'three/addons/objects/MarchingCubes.js';
+
+/* ============ 1. the story (edit this to change content) ============
+   Book lies flat: x = left/right, y = up, z = toward you (you sit at the bottom edge).
+   Right page runs x 0 → 4, z -2.75 (back) → 2.75 (front).
+   Each page: objects stand on the right page (x, z = where, h = height).
+   In the text, [word:id] links a word to an object; the camera visits it while reading. */
+const STOPS = [
+  { title: 'The closed book', text: 'Press ▶ to play the whole story, or → to turn the pages yourself.', cam: [1.6, 8.6, 10.6], look: [1.6, 0, 0.4] },
+  { title: 'Page 1 · Lumi',
+    back: { img: 'assets/lumi-book/sky/sky-1-sunny.png' }, floor: 'assets/lumi-book/rich/floor-sunny.png', mood: { sky: 0xfff0d8, glow: 1 },
+    view: { elev: 17, zoom: 1 },
+    text: 'This is [Lumi:lumi/wave/close]. Lumi [lives on:lumi/wave] a little green [hill:flowers*/grow/wide].',
+    objects: [
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'flowers1', img: 'assets/lumi-book/flowers.png', h: 0.5, x: 0.7, z: 1.5, idle: 'sway', tap: 'grow' },
+      { id: 'flowers2', img: 'assets/lumi-book/flowers.png', h: 0.42, x: 3.5, z: 0.9, idle: 'sway', tap: 'grow' },
+      { id: 'bird', img: 'assets/lumi-book/bird.png', alt: 'assets/lumi-book/bird-laugh.png', h: 0.4, x: 3.2, z: -1.2, fly: 1.9, idle: 'bob', tap: 'fly', enter: 'fly', snd: { fly: 'chirp', hop: 'chirp' } },
+      { id: 'fly1', butterfly: '#f6c9d8', x: 1.1, z: 1.2, fly: .9 }, { id: 'fly2', butterfly: '#fff1b8', x: 3.3, z: .7, fly: 1.1 },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 1.6, z: 0.6, face: .3, tap: 'wave', enter: 'walk' },
+    ] },
+  { title: 'Page 2 · A little grey cloud',
+    back: { img: 'assets/lumi-book/sky/sky-2-light.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#8d99af', sky: 0xb7c3d6, glow: .8, cool: .75 },
+    view: { elev: 13, zoom: 1.05, up: .25 },
+    text: 'One morning, Lumi [looked up:lumi/look/low]. He saw a little grey [cloud:cloud/wiggle/close], all alone. [Drip, drip, drip.:cloud/hop]',
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 2.9, z: -1.1, fly: 2.35, idle: 'bob', tap: 'squish', enter: 'drift' },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 1.0, z: 1.1, face: .7, tap: 'look', lookUp: true },
+    ] },
+  { title: 'Page 3 · Why are you sad?',
+    back: { img: 'assets/lumi-book/sky/sky-3-grey.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#8592a8', sky: 0xb7c3d6, glow: .8, cool: .75 },
+    view: { elev: 22, zoom: .88, yaw: .18, up: -.3 },
+    text: '"Why are you sad?" asked [Lumi:lumi/talk]. The cloud did not [say a word:cloud/hide/close]. It just rained [a little more:cloud/cry].',
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 2.75, z: -0.4, fly: 1.65, idle: 'bob', tap: 'hide' },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 1.7, z: 0.3, face: .8, tap: 'talk' },
+    ] },
+  { title: 'Page 4 · I can help!',
+    back: { img: 'assets/lumi-book/sky/sky-3-grey.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#8592a8', sky: 0xb7c3d6, glow: .8, cool: .75 },
+    view: { elev: 22, zoom: 1.05 },
+    text: '"I can help!" Lumi [waved and waved:lumi/bigwave]. [Whoosh!:cloud/fly/wide] He tried to [blow it away:cloud/fly]. But the cloud [came right back:cloud/hop].',
+    gesture: { type: 'swipe', does: 'gust', hint: 'Swipe across the page to blow the cloud away!' },
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 3.0, z: -0.5, fly: 1.8, idle: 'bob', tap: 'fly' },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 0.9, z: 0.5, face: .95, tap: 'bigwave' },
+    ] },
+  { title: 'Page 5 · A silly face',
+    back: { img: 'assets/lumi-book/sky/sky-3-grey.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#8592a8', sky: 0xb7c3d6, glow: .8, cool: .75 },
+    view: { elev: 24, zoom: .84, up: -.4 },
+    text: 'Lumi [told a joke:lumi/talk]. He [made a silly face:lumi/clap/close]. [Bird laughed:bird/laugh/close]. But the cloud did not. [Drip, drip, drip.:cloud/wiggle]',
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 2.4, z: -1.3, fly: 2.1, idle: 'bob', tap: 'squish' },
+      { id: 'bird', img: 'assets/lumi-book/bird.png', alt: 'assets/lumi-book/bird-laugh.png', h: 0.4, x: 3.0, z: 1.2, idle: 'breathe', tap: 'laugh', say: 'Hee hee!', snd: { hop: 'chirp', laugh: 'chirp' } },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 1.9, z: 1.0, face: .2, tap: 'clap' },
+    ] },
+  { title: 'Page 6 · Looking for the sun',
+    back: { img: 'assets/lumi-book/sky/sky-6-hiddensun.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#97a2b6', sky: 0xb7c3d6, glow: .8, cool: .75 },
+    view: { elev: 18, zoom: 1.05, yaw: .2 },
+    text: 'Lumi ran to [look for:lumi/walk] the [sun:sun/wiggle/wide]. "Sun, please come!" But the sun was too [far away:sun/float/wide].',
+    gesture: { type: 'drag', hint: 'Drag the sun. Can Lumi catch it?' },
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'sun', img: 'assets/lumi-book/sun.png', h: 0.55, x: 3.5, z: -2.0, fly: 2.3, idle: 'bob', tap: 'spin', drag: true },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 1.2, z: -0.8, fly: 1.9, idle: 'bob', tap: 'squish' },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 2.9, z: 0.4, face: 1.0, tap: 'walk', chase: 'sun' },
+    ] },
+  { title: 'Page 7 · Just stay',
+    back: { img: 'assets/lumi-book/sky/sky-7-dark.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#b9c2d0', sky: 0xb2bdd0, glow: .75, cool: .85 },
+    view: { elev: 12, zoom: .92, up: -.3 },
+    text: 'Lumi [sat down:lumi/sit]. He was wet and tired. "I can\'t [fix it:lumi/sulk]," he said. "You don\'t have to fix it," said [Frog:frog/say/close]. "Just [stay with it:frog/say]."',
+    gesture: { type: 'tap', hint: 'Tap Frog. He has something to say.' },
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 2.0, z: -0.6, fly: 1.75, idle: 'bob', tap: 'squish' },
+      { id: 'frog', img: 'assets/lumi-book/frog.png', h: 0.5, x: 3.3, z: 1.3, idle: 'breathe', tap: 'say', say: 'Just stay with it.', snd: { say: 'croak', hop: 'croak' } },
+      { id: 'lumi', model: 'lumi', h: 0.56, pose: 'sit', slump: 1, x: 2.0, z: 0.6, face: .4, tap: 'look', expr: 'sad' },
+    ] },
+  { title: 'Page 8 · The umbrella',
+    back: { img: 'assets/lumi-book/sky/sky-8-easing.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#95a1b5', sky: 0xb7c3d6, glow: .8, cool: .75 },
+    view: { elev: 20, zoom: .9, yaw: -.3 },
+    text: 'So Lumi [opened his umbrella:lumi/open/close]. He sat under the little grey [cloud:cloud/wiggle]. He did not say anything. He just [stayed:lumi/wiggle].',
+    gesture: { type: 'tap', hint: 'Tap Lumi to open his umbrella!' },
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 2.2, z: -0.4, fly: 1.8, idle: 'bob', tap: 'squish' },
+      { id: 'lumi', model: 'lumi', h: 0.56, pose: 'sit', umbrella: 'closed', x: 2.2, z: 0.3, face: .3, tap: 'open', expr: 'worried' },
+    ] },
+  { title: 'Page 9 · A little less',
+    back: { img: 'assets/lumi-book/sky/sky-8-easing.png' }, floor: 'assets/lumi-book/rich/floor-rain.png', mood: { tint: '#9ba7ba', sky: 0xbcc8da, glow: .85, cool: .6 },
+    view: { elev: 30, zoom: .92, yaw: -.15, up: -.3 },
+    text: 'The cloud [rained and rained:cloud/cry]. Then it rained [a little less:cloud/less/close]. [Drip… drip… drip.:cloud/less]',
+    gesture: { type: 'tap', hint: 'Tap the cloud, and the rain gets a little less.' },
+    objects: [
+      { id: 'grassL', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.5, x: 0.85, z: 2.35, idle: 'sway', tap: 'wiggle' },
+      { id: 'grassR', img: 'assets/lumi-book/rich/front-meadow-rain.png', h: 0.46, x: 3.2, z: 2.4, idle: 'sway', tap: 'wiggle', flip: true },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'sad', h: 0.85, x: 2.2, z: -0.4, fly: 1.8, idle: 'bob', tap: 'less' },
+      { id: 'lumi', model: 'lumi', h: 0.56, pose: 'sit', umbrella: 'open', x: 2.2, z: 0.3, face: .3, tap: 'wiggle', expr: 'worried' },
+    ] },
+  { title: 'Page 10 · A rainbow',
+    back: { img: 'assets/lumi-book/sky/sky-10-golden.png' }, floor: 'assets/lumi-book/rich/floor-after.png', mood: { tint: '#b9c2d0', sky: 0xffe2bd, glow: 1.2, cool: .2 },
+    view: { elev: 18, zoom: 1.05, up: .2 },
+    text: 'Slowly, the cloud [cheered up:cloud/cheer/close]. And look, a [rainbow:rainbow/show/wide] [came out:lumi/victory]!',
+    objects: [
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'rainbow', rainbow: true, h: 1.6, x: 2.2, z: -1.6 },
+      { id: 'cloud', cloud: 'less', h: 0.85, x: 2.7, z: -0.5, fly: 1.7, idle: 'bob', tap: 'cheer' },
+      { id: 'bird', img: 'assets/lumi-book/bird.png', alt: 'assets/lumi-book/bird-laugh.png', h: 0.36, x: 3.4, z: -1.0, fly: 1.4, idle: 'bob', tap: 'fly', enter: 'fly', enterOn: 'rainbow', snd: { fly: 'chirp', hop: 'chirp' } },
+      { id: 'flowers1', img: 'assets/lumi-book/flowers.png', h: 0.46, x: 0.7, z: 1.5, idle: 'sway', tap: 'grow' },
+      { id: 'flowers2', img: 'assets/lumi-book/flowers.png', h: 0.4, x: 3.5, z: 1.0, idle: 'sway', tap: 'grow' },
+      { id: 'fly1', butterfly: '#f6c9d8', x: 1.0, z: 1.3, fly: .9, enterOn: 'rainbow' },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 1.2, z: 0.8, face: .6, tap: 'victory' },
+    ] },
+  { title: 'Page 11 · Friends',
+    back: { img: 'assets/lumi-book/sky/sky-1-sunny.png' }, floor: 'assets/lumi-book/rich/floor-sunny.png', mood: { tint: '#ffffff', sky: 0xfff0d8, glow: 1.1 },
+    view: { elev: 22, zoom: 1.05 },
+    text: 'Now Lumi and the little cloud [are friends:cloud/cheer/close]. On sunny days, they [play together:lumi/ride/wide]. On rainy days, [Lumi stays:lumi/wave/close].',
+    gesture: { type: 'tap', hint: 'Tap Lumi, and everyone plays together!' },
+    objects: [
+      { id: 'end', label: 'The End', x: 2.0, z: 1.9, h: .5 },
+      { id: 'fly1', butterfly: '#f6c9d8', x: .8, z: 1.0, fly: 1.0 }, { id: 'fly2', butterfly: '#fff1b8', x: 3.4, z: 1.3, fly: .8 },
+      { id: 'tree', img: 'assets/lumi-book/sky/tree.png', h: 2.4, x: 0.55, z: -1.55, idle: 'sway', tap: 'wiggle' },
+      { id: 'cloud', cloud: 'happy', h: 0.85, x: 2.75, z: -0.5, fly: 1.6, idle: 'bob', tap: 'ride' },
+      { id: 'bird', img: 'assets/lumi-book/bird.png', alt: 'assets/lumi-book/bird-laugh.png', h: 0.36, x: 0.9, z: -0.6, fly: 1.5, idle: 'bob', tap: 'fly', enter: 'fly', snd: { fly: 'chirp', hop: 'chirp' } },
+      { id: 'frog', img: 'assets/lumi-book/frog.png', h: 0.46, x: 3.3, z: 1.2, idle: 'breathe', tap: 'hop', snd: { hop: 'croak' } },
+      { id: 'flowers1', img: 'assets/lumi-book/flowers.png', h: 0.44, x: 0.6, z: 1.4, idle: 'sway', tap: 'grow' },
+      { id: 'flowers2', img: 'assets/lumi-book/flowers.png', h: 0.38, x: 3.6, z: 0.4, idle: 'sway', tap: 'grow' },
+      { id: 'lumi', model: 'lumi', h: 0.56, x: 1.8, z: 0.6, face: .4, tap: 'party', enter: 'walk' },
+    ] },
+];
+/* Word links: [text:id/action/shot]
+   id ending in *  = a group: "bat*" means every object whose id starts with "bat" (they act together, the camera frames them all)
+   action magic:…  = a magic moment from this story's list (burst, jump, flash, rain — join with +)
+   shot count      = a quick close cut, for counting things one by one ("one bat, two bats…")
+   action (optional): hop, wiggle, grow, spin, float, fly, run, glow — what the object does
+   shot   (optional): close, wide, low, high, side — how the camera frames it
+   Objects: model   = a rigged 3D character ("fox") with its own animations
+            fly: y  = it floats in the air at that height instead of standing on the page
+            idle    = sway, breathe, bob, swing, circle — its always-on motion
+            tap     = what it does when you tap it
+   Pages:   back    = the standing back panel picture (filter = optional colour change)
+            floor   = a picture painted on the lying page itself (the ground continues from the panel)
+            view    = this page's camera: elev (degrees), zoom (<1 closer), yaw (radians, + looks from the right), up (shift the look point)
+            face    = which way a character stands (radians; 0 = at the reader, + turns to the right)
+            mood    = how the world around the book is lit while this page is open (cool 0..1 = grey rainy light, also greys Lumi; tint = the cloud's grey on this page, picked against its sky)
+   Lumi story extras: cloud: 'sad' | 'cry' | 'less' | 'happy' = the 3D code cloud and its mood (actions: squish, hide, cry, less, cheer)
+            rainbow: true = a rainbow drawn in code (action: show) · alt = a second picture shown while the object acts
+            pose: 'sit' = the character stays sitting (Lumi actions: wave, bigwave, look, jump, walk, sit = plop down again)
+            umbrella: 'closed' | 'open' = Lumi holds a 3D umbrella (action open)
+            enter: walk | fly | drift = how it comes onto the page when the page opens (enterOn: 'rainbow' = only after the rainbow)
+            drag: true = you can drag it (it springs back); chase: id = the character runs after that object while it is dragged
+            butterfly: colour = a code-drawn butterfly; label: text = a little paper card (The End), shown by the party
+            Lumi actions also: pushed (by the gust), ride (rides the cloud around the page), party (everyone joins in)
+            expr: sad | worried | big = Lumi's mouth on this page (lumi-face.js); leave it out for his own painted smile */
+const FLIPS = STOPS.length - 1;
+const TURN_SECONDS = 2.2;                  // one page turn (bigger = slower)
+const WORD_SECONDS = 0.36;                 // reading speed per word
+const FOCUS_HOLD = 3.6;                    // seconds the camera stays on an object
+const CAMERA_SPEED = 0.6;                  // one knob for every camera move (smaller = calmer, 1 = the old speed)
+/* ============ LOOK: shared polish for every book (a story can override any of it with WORLD.look) ============ */
+const LOOK = {
+  glow:    { strength: .9, radius: .55, threshold: 0 },   // soft bloom, only on things marked as lights
+  sparkle: { size: .11, magicSize: .32, rate: 4, color: 0xffd08a },   // sparkles: spreading edge (small) and magic bursts (bigger)
+  closest: { picture: 1.9, character: 3.2 },              // camera never gets nearer than this (characters need more room)
+  // painted look: 3D things are shaded in soft bands like a picture book, and the whole picture goes through one sheet of paper
+  paint: { bands: [.46, .7, .9], tint: 0xe6e0d6, outline: 0x5a4a40, outlineWidth: .0038, outlineAlpha: .75, paper: .16, vignette: .2 },   // tint darkens the toon a touch so it isn't blown out
+};
+const Q = new URLSearchParams(location.search), OUTLINE_ON = Q.get('outline') === '1', TOON_ON = Q.get('shade') === 'toon';   // ?outline=0 / ?shade=toon to compare looks (default: soft shading)
+const TURN_VIEW = { cam: [0.6, 6.0, 8.6], look: [0.4, 0.3, 0] };   // camera backs off here mid-turn
+
+/* ============ helpers ============ */
+const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+const lerp = (a, b, t) => a + (b - a) * t;
+const smooth = t => t * t * (3 - 2 * t);
+const easeInOut = t => t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+const easeSine = t => -(Math.cos(Math.PI * t) - 1) / 2;
+const DEG = Math.PI / 180;
+
+/* ============ scene ============ */
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.prepend(renderer.domElement);
+const canvas = renderer.domElement;
+
+const scene = new THREE.Scene();
+const GLOW_LAYER = 1;                      // anything with this layer enabled gets the soft glow
+/* ============ the world around the book (one per story — swap this for another story) ============
+   ground = the surface the book lies on, props = things standing around it,
+   react  = how the world answers the story ("bat/fly" → leaves blow, "lantern/glow" → the light dims) */
+const WORLD = {
+  sky: 0xc9d3dd, fog: [16, 38],
+  ground: { base: '#8fa66f', blotch: ['#7f9862', '#9db37a', '#86a06c', '#a7b886'], speck: 'rgba(255,250,235,.18)' },
+  table: { wood: '#a8754a', grain: '#8a5a36', room: 0x3a2a20 },   // the ordinary table + room before the book opens
+  trail: 'stars',
+  card: 'rain',                              // story card look: rain (this book's), torn, sticker, riso (the 🃏 button switches)
+  // only general scenery here, never things from the story pages
+  props: [
+    { img: 'assets/lumi-book/rich/world-hills.png', h: 2.2, x: 1.5, z: -16, idle: 'none' },
+    { img: 'assets/lumi-book/rich/world-trees.png', h: 3.4, x: -5.5, z: -9.5, idle: 'sway' },
+    { img: 'assets/lumi-book/rich/world-trees.png', h: 3.6, x: 7.5, z: -10.5, idle: 'sway', flip: true },
+    { img: 'assets/lumi-book/rich/world-trees.png', h: 3.0, x: -9.5, z: -2, idle: 'sway' },
+    { img: 'assets/lumi-book/rich/world-trees.png', h: 3.2, x: 11, z: -1, idle: 'sway', flip: true },
+  ],
+  groundImg: 'assets/lumi-book/rich/ground-meadow.png',   // painted meadow, tiled (mirrored so it has no seams)
+  candles: [],
+  leaves: 0,
+  // each story picks its own sounds (what plays for each action) and its own magic moments
+  sfx: { hop: 'boing', fly: 'whoosh', run: 'patter', walk: 'patter', glow: 'chime', spin: 'twirl', grow: 'pop', float: 'twinkle',
+         wiggle: 'giggle', popup: 'pop', gust: 'whoosh', magic: 'sparkle', star: 'star', hover: 'tick',
+         wave: 'twinkle', bigwave: 'twinkle', look: 'tick', jump: 'boing', squish: 'boing', hide: 'pop', cry: 'twinkle',
+         less: 'chime', cheer: 'sparkle', show: 'rainbow', sulk: 'sigh', say: 'boing', laugh: 'giggle', open: 'umbrella', talk: 'tick', clap: 'patter', victory: 'twirl' },
+  music: { rainy: 'assets/lumi-book/music/rainy.mp3', sunny: 'assets/lumi-book/music/sunny.mp3', vol: 1, duck: .5, sunnyFrom: 10, clearing: .45 },   // two looping tracks: rainy from the cover on, sunny when the rainbow comes out on page `sunnyFrom` (clearing = rainy level on that page before it); duck = how much of the music stays under her voice
+  magic: { default: 'burst' },
+  cutGap: 2.0,                               // seconds between camera cuts while reading (count shots cut faster)
+  react: {},
+};
+
+for (const k in WORLD.look || {}) Object.assign(LOOK[k], WORLD.look[k]);   // per-story tweaks
+scene.background = new THREE.Color(WORLD.sky);
+scene.fog = new THREE.Fog(WORLD.sky, ...WORLD.fog);
+const camera = new THREE.PerspectiveCamera(36, 1, .1, 100);
+
+// night lighting: cool moonlight overall, a warm key light so the pages stay readable,
+// and a flickering lantern light on the ground
+const hemi = new THREE.HemisphereLight(0xb9c3ff, 0x6f7a68, .75); scene.add(hemi);
+const BOOK_C = new THREE.Vector2(0.6, 0.2);    // where the world spreads out from
+const reveal = { value: 0 };                   // radius of the spread-out world (0 = bare surface)
+const sun = new THREE.DirectionalLight(0xffe9cc, 1.9);
+sun.position.set(-3, 9, 7); sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+Object.assign(sun.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 });
+sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.02;
+scene.add(sun);
+const moon = new THREE.DirectionalLight(0xdfe6f2, .7); moon.position.set(-6, 7, -9); scene.add(moon);
+const fillLight = new THREE.DirectionalLight(0xc9d6ea, .55); fillLight.position.copy(sun.position); scene.add(fillLight);   // no shadow: lifts the shadows and turns them blue
+const coolSun = new THREE.Color(0xb9c6d8); let moodCool = 0;
+
+// ground texture (placeholder drawn in code: blotchy felt + paper specks; Codex art replaces it later)
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 80), new THREE.MeshStandardMaterial({ roughness: .95 }));
+{
+  const c = document.createElement('canvas'); c.width = c.height = 1024;
+  const g = c.getContext('2d'), G = WORLD.ground;
+  g.fillStyle = G.base; g.fillRect(0, 0, 1024, 1024);
+  for (let i = 0; i < 140; i++) {
+    g.globalAlpha = .25 + Math.random() * .3; g.fillStyle = G.blotch[i % G.blotch.length];
+    g.beginPath(); g.ellipse(Math.random() * 1024, Math.random() * 1024, 30 + Math.random() * 110, 20 + Math.random() * 70, Math.random() * 3, 0, Math.PI * 2); g.fill();
+  }
+  g.globalAlpha = 1; g.fillStyle = G.speck;
+  for (let i = 0; i < 2600; i++) g.fillRect(Math.random() * 1024, Math.random() * 1024, 1 + Math.random() * 2, 1);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(7, 7); t.anisotropy = 8;
+  ground.material.map = t;
+  if (WORLD.groundImg) {   // swap in the painted meadow once it loads; mirrored repeat hides the tile seams
+    const pt = new THREE.TextureLoader().load(WORLD.groundImg, () => { ground.material.map = pt; ground.material.needsUpdate = true; });
+    pt.colorSpace = THREE.SRGBColorSpace; pt.wrapS = pt.wrapT = THREE.MirroredRepeatWrapping; pt.repeat.set(9, 9); pt.anisotropy = 8;
+  }
+}
+const groundDry = new THREE.Color(0xdde3cc), groundWet = new THREE.Color(0x98a3a6);   // rainy pages: the meadow darkens and greys
+// the sky over the meadow: a painted strip wrapped around everything (Codex), tinted grey on rainy pages
+const skyDome = (() => {
+  const tex = new THREE.TextureLoader().load('assets/lumi-book/world/skydome.png');
+  tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = THREE.MirroredRepeatWrapping; tex.repeat.x = 2;
+  const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.BackSide, fog: false });
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(70, 70, 46, 64, 1, true), mat); m.position.y = 12; m.raycast = () => {}; scene.add(m);
+  const cap = new THREE.Mesh(new THREE.CircleGeometry(70, 48), new THREE.MeshBasicMaterial({ color: 0xcfe0f2, side: THREE.DoubleSide, fog: false }));
+  cap.rotation.x = Math.PI / 2; cap.position.y = 35; cap.raycast = () => {}; scene.add(cap);
+  return { m, cap, mat, capMat: cap.material, day: new THREE.Color(0xffffff), grey: new THREE.Color(0xa3acb8), capDay: new THREE.Color(0xcfe0f2) };
+})();
+// the wooden table the book lies on before it opens (placeholder planks drawn in code)
+const tableTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 512; const g = c.getContext('2d'), T = WORLD.table;
+  g.fillStyle = T.wood; g.fillRect(0, 0, 512, 512);
+  for (let p = 0; p < 4; p++) {                                       // 4 planks with grain lines
+    const y0 = p * 128;
+    g.fillStyle = `rgba(0,0,0,${.04 + (p % 2) * .05})`; g.fillRect(0, y0, 512, 128);
+    g.strokeStyle = T.grain; g.globalAlpha = .35;
+    for (let i = 0; i < 14; i++) {
+      g.lineWidth = .8 + Math.random() * 1.6; g.beginPath();
+      const yy = y0 + 6 + Math.random() * 116, ph = Math.random() * 6;
+      for (let x = 0; x <= 512; x += 16) g.lineTo(x, yy + Math.sin(x / 70 + ph) * 3);
+      g.stroke();
+    }
+    g.globalAlpha = .6; g.fillStyle = 'rgba(50,25,10,.7)'; g.fillRect(0, y0 + 126, 512, 2);
+    g.globalAlpha = 1;
+  }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.anisotropy = 8; return t;
+})();
+const doneU = { value: 0 };
+ground.material.onBeforeCompile = sh => {
+  sh.uniforms.uReveal = reveal; sh.uniforms.uTable = { value: tableTex }; sh.uniforms.uDone = doneU;
+  sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos;')
+    .replace('#include <begin_vertex>', '#include <begin_vertex>\nvWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+  sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vWPos; uniform float uReveal; uniform sampler2D uTable; uniform float uDone;')
+    .replace('#include <map_fragment>', `#include <map_fragment>
+      float rd = length(vWPos.xz - vec2(${BOOK_C.x}, ${BOOK_C.y}));
+      float wobble = sin(atan(vWPos.z - ${BOOK_C.y}, vWPos.x - ${BOOK_C.x}) * 7.0) * .35;   // a slightly wavy, papery edge
+      vec3 wood = pow(texture2D(uTable, vWPos.xz * .12).rgb, vec3(2.2));
+      diffuseColor.rgb = mix(wood, diffuseColor.rgb, 1.0 - smoothstep(uReveal - 1.2, uReveal, rd + wobble));`)
+    // a glowing line runs along the edge while the world spreads
+    .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
+      float ring = (1.0 - smoothstep(0.0, .45, abs(rd + wobble - uReveal + .5))) * step(.05, uReveal) * (1.0 - uDone);
+      totalEmissiveRadiance += vec3(1.0, .72, .35) * ring * 1.6;`);
+};
+ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+// soft dark patch under the book
+{
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d'), gr = g.createRadialGradient(128, 128, 20, 128, 128, 128);
+  gr.addColorStop(0, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 256, 256);
+  const shade = new THREE.Mesh(new THREE.PlaneGeometry(13, 9), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false }));
+  shade.rotation.x = -Math.PI / 2; shade.position.set(0.6, 0.005, 0.2); scene.add(shade);
+}
+
+// little sparkles that rise from the spreading edge
+const sparkTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,250,225,1)'); gr.addColorStop(.3, 'rgba(255,205,120,.8)'); gr.addColorStop(1, 'rgba(255,160,60,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+})();
+const edgeSparks = Array.from({ length: 40 }, () => {
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, color: LOOK.sparkle.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+  sp.visible = false; sp.layers.enable(GLOW_LAYER); scene.add(sp); return { sp, life: 0, vy: 0 };
+});
+function updateEdgeSparks(dt, spreading) {
+  for (const e of edgeSparks) {
+    if (e.life <= 0) {
+      if (spreading && Math.random() < dt * LOOK.sparkle.rate) {   // spawn on the moving edge
+        const a = Math.random() * Math.PI * 2, r = reveal.value - .4;
+        e.sp.position.set(BOOK_C.x + Math.cos(a) * r, .05, BOOK_C.y + Math.sin(a) * r);
+        e.life = 1; e.vy = .6 + Math.random() * .9; e.sp.visible = true;
+      } else { e.sp.visible = false; continue; }
+    }
+    e.life -= dt * .8; e.sp.position.y += e.vy * dt;
+    const s = LOOK.sparkle.size * Math.sin(Math.PI * Math.max(0, e.life)); e.sp.scale.set(s, s, 1);
+  }
+}
+
+// fallen leaves on the ground; a gust lifts them and blows them across
+const leafShape = new THREE.Shape(); leafShape.moveTo(0, -.2); leafShape.quadraticCurveTo(.2, 0, 0, .22); leafShape.quadraticCurveTo(-.2, 0, 0, -.2);
+const leafGeo = new THREE.ShapeGeometry(leafShape);
+const fallen = [];
+for (let i = 0; i < WORLD.leaves; i++) {
+  const m = new THREE.Mesh(leafGeo, new THREE.MeshStandardMaterial({ color: [0xe8742a, 0xd94c2a, 0xf2a93b, 0x9a5a2a][i % 4], side: THREE.DoubleSide, roughness: .8 }));
+  let x, z;
+  do { x = (Math.random() - .5) * 22; z = (Math.random() - .5) * 15; } while (Math.abs(x - .1) < 4.6 && Math.abs(z) < 3.3);
+  m.position.set(x, .02, z); m.rotation.set(-Math.PI / 2, 0, Math.random() * 6); m.scale.setScalar(.8 + Math.random() * .7);
+  m.castShadow = true; scene.add(m);
+  m.visible = false;
+  fallen.push({ m, v: new THREE.Vector3(), spin: 0, d: Math.hypot(x - BOOK_C.x, z - BOOK_C.y) });
+}
+function gust(dirX = 1) {
+  for (const l of fallen) {
+    if (Math.random() < .35) continue;
+    l.v.set(dirX * (1.5 + Math.random() * 2.5), 1.2 + Math.random() * 2.2, (Math.random() - .5) * 1.2);
+    l.spin = (Math.random() - .5) * 10;
+  }
+}
+function updateLeaves(dt) {
+  for (const l of fallen) {
+    if (l.v.lengthSq() < 1e-4 && l.m.position.y <= .021) continue;
+    l.v.y -= 3.2 * dt;
+    l.m.position.addScaledVector(l.v, dt);
+    l.m.rotation.z += l.spin * dt; l.m.rotation.x = -Math.PI / 2 + Math.sin(l.m.rotation.z * 2) * .6 * Math.min(1, l.m.position.y);
+    if (l.m.position.y < .02) { l.m.position.y = .02; l.v.multiplyScalar(.6); l.v.y = 0; l.spin *= .5; l.m.rotation.x = -Math.PI / 2; }
+    if (l.m.position.x > 12) l.m.position.x -= 24; if (l.m.position.x < -12) l.m.position.x += 24;
+  }
+}
+
+/* ============ 2. the book's materials + cover (change the cover per story here) ============ */
+const BOOK = {
+  paper: 'assets/tex-paper-v2.png',       // page paper (Codex)
+  cloth: 'assets/tex-cloth.png',          // cover cloth (Codex)
+  cover: {
+    style: 'full',                        // 'full' = picture covers the whole cover · 'framed' = cloth cover with a framed picture
+    title: ['Lumi and the', 'Little Grey Cloud'],    // lines of the title
+    subtitle: 'a rainy-day story',
+    tagline: ["Don't know what to do...", 'but you can stay.'],   // small handwritten lines at the foot of the cover
+    art: 'assets/lumi-book/rich/cover-a-umbrella.png',   // the cover picture (Codex): Lumi under his umbrella, the cloud beside him
+    fill: '#4a3a30',
+    focus: .5,                            // full style: which part of a wide picture to keep (0 = left, 1 = right)
+    edge: '#5b7186',                      // full style: colour of the board edges and spine
+    ink: '#f2d48c',                       // framed style: gold title colour
+  },
+};
+const imgs = {};
+const pages = [];                          // every page canvas, redrawn once the pictures have loaded
+const loadImg = src => imgs[src] ||= Object.assign(new Image(), { src, onload: () => pages.forEach(drawPage) });
+
+document.fonts.load('800 60px "Baloo 2"').then(() => pages.forEach(drawPage));
+document.fonts.load('700 60px Caveat').then(() => pages.forEach(drawPage));
+
+function pageTexture(opts) {
+  const c = document.createElement('canvas'); c.width = 1024; c.height = 1408;   // 2× for sharp pages
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 8;
+  const page = { c, tex, ...opts }; pages.push(page); drawPage(page);
+  return tex;
+}
+// fill with a tiled picture (or a flat colour until it has loaded)
+function fillWith(g, src, fallback, scale) {
+  const im = src && loadImg(src);
+  if (im && im.complete && im.naturalWidth) {
+    const pat = g.createPattern(im, 'repeat'); pat.setTransform(new DOMMatrix().scale(scale)); g.fillStyle = pat;
+  } else g.fillStyle = fallback;
+  g.fillRect(0, 0, 512, 704);
+}
+function drawPage(p) {
+  const g = p.c.getContext('2d'), C = BOOK.cover;
+  g.setTransform(2, 0, 0, 2, 0, 0); g.textAlign = 'center';
+  if (p.cover && C.style === 'full') {
+    // the picture fills the whole cover (cropped like CSS "object-fit: cover")
+    const im = loadImg(C.art);
+    g.fillStyle = C.edge; g.fillRect(0, 0, 512, 704);
+    if (im.complete && im.naturalWidth) {
+      const k = Math.max(512 / im.naturalWidth, 704 / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+      g.drawImage(im, (512 - w) * C.focus, (704 - h) / 2, w, h);
+    }
+    const top = g.createLinearGradient(0, 0, 0, 300);                                // a little lighter behind the title
+    top.addColorStop(0, 'rgba(253,247,232,.35)'); top.addColorStop(1, 'rgba(253,247,232,0)'); g.fillStyle = top; g.fillRect(0, 0, 512, 300);
+    // chunky storybook title: dark outline, soft shadow, cream fill
+    // hand-lettered title: pencil brown with a soft cream halo so it sits on the painting
+    g.lineJoin = 'round'; g.font = '700 74px Caveat, cursive';
+    C.title.forEach((line, i) => {
+      const y = 118 + i * 72;
+      g.strokeStyle = 'rgba(253,247,232,.95)'; g.lineWidth = 14; g.strokeText(line, 256, y);
+      g.fillStyle = C.fill; g.fillText(line, 256, y);
+    });
+    g.font = '600 30px Caveat, cursive';
+    const sy = 118 + C.title.length * 72 - 10;
+    g.strokeStyle = 'rgba(253,247,232,.95)'; g.lineWidth = 8; g.strokeText(C.subtitle, 256, sy); g.fillStyle = C.fill; g.fillText(C.subtitle, 256, sy);
+    if (C.tagline) {   // the quiet line at the bottom, like the back-cover whisper of a picture book
+      g.font = '600 27px Caveat, cursive'; g.lineWidth = 7;
+      C.tagline.forEach((line, i) => { const y = 704 - 58 + i * 30; g.strokeText(line, 256, y); g.fillText(line, 256, y); });
+    }
+  } else if (p.cover) {
+    fillWith(g, BOOK.cloth, '#b03a2e', .55);
+    const v = g.createRadialGradient(256, 352, 120, 256, 352, 460);                  // soft worn edges
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.28)'); g.fillStyle = v; g.fillRect(0, 0, 512, 704);
+    // pressed-in border and title: a dark offset under the gold makes it look printed into the cloth
+    const press = (fn) => { g.save(); g.translate(1.5, 2); g.globalAlpha = .45; fn('#2a0d08'); g.restore(); fn(C.ink); };
+    press(col => { g.strokeStyle = col; g.lineWidth = 3; g.strokeRect(36, 36, 440, 632); g.lineWidth = 1.2; g.strokeRect(46, 46, 420, 612); });
+    const artIm = C.art && loadImg(C.art);
+    if (artIm && artIm.complete && artIm.naturalWidth) {
+      g.save(); g.beginPath(); g.roundRect(96, 300, 320, 240, 14); g.clip(); g.drawImage(artIm, 96, 300, 320, 240); g.restore();
+      press(col => { g.strokeStyle = col; g.lineWidth = 3; g.beginPath(); g.roundRect(96, 300, 320, 240, 14); g.stroke(); });
+    }
+    const top = C.art ? 150 : 290;
+    press(col => {
+      g.fillStyle = col; g.font = 'bold 56px "Avenir Next", sans-serif';
+      C.title.forEach((line, i) => g.fillText(line, 256, top + i * 66));
+      g.font = 'italic 22px "Avenir Next", sans-serif'; g.fillText(C.subtitle, 256, top + C.title.length * 66 + 10);
+    });
+  } else {
+    fillWith(g, BOOK.paper, '#f3e8d0', .3);
+    const fl = p.floor && loadImg(p.floor);                              // the ground painted right onto the page
+    if (fl && fl.complete && fl.naturalWidth) {
+      const k = Math.max(512 / fl.naturalWidth, 704 / fl.naturalHeight), w = fl.naturalWidth * k, h = fl.naturalHeight * k;
+      g.drawImage(fl, (512 - w) / 2, (704 - h) / 2, w, h);
+    }
+    // real books darken softly into the spine (gutter) and catch a little light at the outer edge
+    const gx = p.side === 'back' ? 512 : 0, dir = p.side === 'back' ? -1 : 1;
+    const gut = g.createLinearGradient(gx, 0, gx + dir * 150, 0);
+    gut.addColorStop(0, 'rgba(90,60,30,.32)'); gut.addColorStop(.25, 'rgba(90,60,30,.12)'); gut.addColorStop(1, 'rgba(90,60,30,0)');
+    g.fillStyle = gut; g.fillRect(0, 0, 512, 704);
+    const out = g.createLinearGradient(512 - gx, 0, 512 - gx - dir * 60, 0);
+    out.addColorStop(0, 'rgba(255,250,235,.25)'); out.addColorStop(1, 'rgba(255,250,235,0)');
+    g.fillStyle = out; g.fillRect(0, 0, 512, 704);
+    g.strokeStyle = 'rgba(160,130,90,.25)'; g.lineWidth = 2; g.strokeRect(30, 30, 452, 644);
+    // the page title, written by hand in pencil-brown on a little strip of paper
+    if (p.title) {
+      g.save(); g.translate(256, 648); g.rotate(-.025);
+      g.font = '700 40px Caveat, cursive'; const tw = g.measureText(p.title).width;
+      g.fillStyle = 'rgba(251,244,228,.85)'; g.beginPath(); g.roundRect(-tw / 2 - 16, -32, tw + 32, 46, 6); g.fill();
+      g.fillStyle = '#5a4a40'; g.fillText(p.title, 0, 2); g.restore();
+    }
+    g.fillStyle = '#8a7a6a'; g.font = '600 24px Caveat, cursive'; g.fillText(p.num || '', 256, 690);
+  }
+  p.tex.needsUpdate = true;
+}
+
+/* ============ 3. the book: leaves that bend while they turn ============ */
+const PW = 4, PH = 5.5, SEG = 40;
+const BOARD = 0.09, BLOCK = 0.09;          // cover board thickness, page-stack thickness
+const BASE_Y = BOARD + BLOCK;              // where the turning pages sit
+const book = new THREE.Group(); scene.add(book);
+
+// cloth for the boards and spine
+const clothTex = new THREE.TextureLoader().load(BOOK.cloth);
+clothTex.colorSpace = THREE.SRGBColorSpace; clothTex.wrapS = clothTex.wrapT = THREE.RepeatWrapping; clothTex.repeat.set(1.6, 2.2);
+const boardMat = BOOK.cover.style === 'full'
+  ? new THREE.MeshStandardMaterial({ color: BOOK.cover.edge, roughness: .55 })      // printed, slightly glossy hardcover
+  : new THREE.MeshStandardMaterial({ map: clothTex, roughness: .9 });
+// page edges: many fine paper lines seen from the side
+const edgeTex = (() => {
+  const c = document.createElement('canvas'); c.width = 64; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#efe4cc'; g.fillRect(0, 0, 64, 64);
+  for (let y = 0; y < 64; y += 2) { g.fillStyle = `rgba(120,95,60,${.12 + Math.random() * .12})`; g.fillRect(0, y, 64, 1); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = THREE.RepeatWrapping; t.repeat.set(8, 1); return t;
+})();
+const edgeMat = new THREE.MeshStandardMaterial({ map: edgeTex, roughness: .9 });
+const blockTopMat = new THREE.MeshStandardMaterial({ color: 0xf6ecd6, roughness: .9 });
+const blockMats = [edgeMat, edgeMat, blockTopMat, blockTopMat, edgeMat, edgeMat];   // sides show the page lines
+
+function stack(side) {                      // one half of the book: cloth board + page block
+  const g = new THREE.Group();
+  const board = new THREE.Mesh(new THREE.BoxGeometry(PW + .15, BOARD, PH + .3), boardMat);
+  board.position.set(side * (PW / 2 + .02), BOARD / 2, 0);
+  const block = new THREE.Mesh(new THREE.BoxGeometry(PW - .06, BLOCK, PH - .06), blockMats);
+  block.position.set(side * (PW / 2 - .01), BOARD + BLOCK / 2, 0);
+  for (const m of [board, block]) { m.castShadow = m.receiveShadow = true; g.add(m); }
+  book.add(g); return g;
+}
+const rightStack = stack(1);
+const leftStack = stack(-1);                // shows up as the cover opens
+const spine = new THREE.Mesh(new THREE.CylinderGeometry(BASE_Y * .62, BASE_Y * .62, PH + .3, 20, 1, false, Math.PI, Math.PI), boardMat);
+spine.rotation.x = Math.PI / 2; spine.position.set(0, BASE_Y * .5, 0); spine.castShadow = true; book.add(spine);
+
+function makeLeaf(frontTex, backTex, soft) {
+  const pos = new THREE.BufferAttribute(new Float32Array((SEG + 1) * 2 * 3), 3);
+  const uvF = [], uvB = [], idxF = [], idxB = [];
+  for (let j = 0; j <= SEG; j++) {
+    const u = j / SEG;
+    uvF.push(u, 1, u, 0);
+    uvB.push(1 - u, 1, 1 - u, 0);
+    if (j < SEG) {
+      const a = j * 2, b = a + 1, c = a + 2, d = a + 3;
+      idxF.push(a, b, c, c, b, d);
+      idxB.push(a, c, b, c, d, b);
+    }
+  }
+  const mk = (uv, idx, tex) => {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', pos); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.setIndex(idx);
+    const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex, roughness: .85 }));
+    m.castShadow = m.receiveShadow = true; return m;
+  };
+  const group = new THREE.Group();
+  const front = mk(uvF, idxF, frontTex), back = mk(uvB, idxB, backTex);
+  group.add(front, back);
+  const leaf = { group, front, back, pos, soft, theta: 0 };
+  bendLeaf(leaf, 0, 1);
+  return leaf;
+}
+
+// the hinge leads and the free edge trails behind like soft paper
+function bendLeaf(leaf, theta, dir) {
+  const s = Math.sin(theta);
+  const curl = leaf.soft * 2.1 * s * dir;
+  const bow = leaf.soft * 0.5 * s;
+  const arr = leaf.pos.array, du = PW / SEG;
+  let x = 0, y = 0;
+  for (let j = 0; j <= SEG; j++) {
+    const u = j / SEG;
+    for (const [k, z] of [[0, -PH / 2], [1, PH / 2]]) {
+      const i = (j * 2 + k) * 3; arr[i] = x; arr[i + 1] = y; arr[i + 2] = z;
+    }
+    const phi = bow * (1 - u) * 0.6 - curl * Math.pow(u, 1.6);
+    x += Math.cos(phi) * du; y += Math.sin(phi) * du;
+  }
+  leaf.pos.needsUpdate = true;
+  leaf.front.geometry.computeVertexNormals(); leaf.back.geometry.computeVertexNormals();
+  leaf.front.geometry.computeBoundingSphere(); leaf.back.geometry.computeBoundingSphere();
+}
+
+const leaves = [];
+leaves.push(makeLeaf(pageTexture({ cover: true }), pageTexture({ num: '', side: 'back' }), 0.15));
+for (let k = 1; k < STOPS.length; k++) {
+  const front = pageTexture({ num: String(k * 2 - 1), title: STOPS[k].title.split('·')[1]?.trim(), floor: STOPS[k].floor });
+  const back = pageTexture({ num: String(k * 2), side: 'back' });
+  leaves.push(makeLeaf(front, back, k === STOPS.length - 1 ? 0 : 1));
+}
+leaves.forEach(l => book.add(l.group));
+
+/* ============ 4. pop-ups: a standing back page + cut-outs, rising with a spring ============
+   Every piece hangs on a hinge. "a" goes 0 (folded flat) → 1 (standing). */
+const loader = new THREE.TextureLoader();
+const texCache = {};
+const loadTex = src => texCache[src] ||= (() => { const t = loader.load(src); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8; return t; })();
+const popups = [];            // every hinged piece
+if (Q.get("debug")) window.__pop = popups;
+const pageObjects = [];       // pageObjects[k][id] = { mesh, center(), h }
+if (Q.get("debug")) window.__po = pageObjects;   // ?debug=1: lets a test script reach the page objects
+if (Q.get("debug")) window.__cam = camera;
+if (Q.get("debug")) window.__act = (k, id, a) => doAction(pageObjects[k][id], a);
+
+// a page's back panel; with a filter, the picture is re-coloured through a canvas
+function backTex({ img, filter }) {
+  if (!filter) return loadTex(img);
+  const c = document.createElement('canvas'), t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  const im = new Image();
+  im.onload = () => { c.width = im.width; c.height = im.height; const g = c.getContext('2d'); g.filter = filter; g.drawImage(im, 0, 0); t.needsUpdate = true; };
+  im.src = img;
+  return t;
+}
+
+function cutout(src, h, onSize) {
+  const mesh = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+    new THREE.MeshStandardMaterial({ alphaTest: .5, side: THREE.DoubleSide, roughness: .8 }));
+  const tex = loadTex(src);
+  const fit = () => {
+    const w = h * tex.image.width / tex.image.height;
+    mesh.geometry.dispose(); mesh.geometry = new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0);
+    onSize && onSize(w);
+  };
+  mesh.material.map = tex;
+  // the same image can be shared by several cut-outs, so just wait until it has loaded
+  const wait = () => tex.image && tex.image.width ? fit() : requestAnimationFrame(wait); wait();
+  mesh.castShadow = true;
+  return mesh;
+}
+
+/* ============ 4c. the little grey cloud: a 3D cloud made in code ============
+   one smooth shape (metaballs), a face drawn on a canvas so the mood can blend,
+   and its own soft rain that splashes on the page */
+const CLOUD_MOODS = {
+  //        grey 0..1, mouth -1 sad .. 1 smile, open, brows -1 worried .. 1 happy, eyes 1 = squeezed shut, rain per second, puff size
+  sad:   { grey: 1.0, mouth: -0.7, open: 0,   brows: -0.8, eyes: 0, rain: 34, puff: 1.00 },
+  cry:   { grey: 1.0, mouth: -1.0, open: 0.5, brows: -1.0, eyes: 1, rain: 90, puff: 0.96 },
+  less:  { grey: 0.6, mouth: -0.2, open: 0,   brows: -0.3, eyes: 0, rain: 9,  puff: 1.03 },
+  happy: { grey: 0.0, mouth: 1.0,  open: 0.6, brows: 0.6,  eyes: 0, rain: 0,  puff: 1.10 },
+};
+const CLOUD_GREY = new THREE.Color('#b6c0cf'), CLOUD_WHITE = new THREE.Color('#fbf8f1');
+const CLOUD_PUFFS = [ // x, y, z, radius
+  [0, 0.12, 0, 1.0], [-0.75, -0.08, 0.05, 0.78], [0.8, -0.06, 0.05, 0.8],
+  [-0.35, 0.5, -0.1, 0.72], [0.4, 0.55, -0.12, 0.68], [-1.3, -0.25, 0, 0.55],
+  [1.35, -0.25, 0, 0.56], [0, -0.3, 0.25, 0.78], [-0.6, -0.35, 0.25, 0.6], [0.62, -0.35, 0.25, 0.6],
+];
+const CLOUD_BOX = 2.3, CLOUD_SUB = 220, CLOUD_W = 3.8;      // CLOUD_W = width of the cloud in its own units
+const PUDDLES = [[1.08, -0.94, .42], [3.1, .83, .48]];       // where the puddles are painted on the page floor (x, z, radius)
+function canvasTexture(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d')); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+const dropTex = canvasTexture(32, 128, c => {     // a short soft dash: blue edge, white core, fading at the top
+  c.lineCap = 'round';
+  c.strokeStyle = 'rgba(110,145,195,0.9)'; c.lineWidth = 12; c.beginPath(); c.moveTo(16, 22); c.lineTo(16, 112); c.stroke();
+  c.strokeStyle = 'rgba(235,244,252,0.95)'; c.lineWidth = 5; c.beginPath(); c.moveTo(16, 26); c.lineTo(16, 110); c.stroke();
+  const g = c.createLinearGradient(0, 0, 0, 128); g.addColorStop(0, 'rgba(0,0,0,1)'); g.addColorStop(.5, 'rgba(0,0,0,0)');
+  c.globalCompositeOperation = 'destination-out'; c.fillStyle = g; c.fillRect(0, 0, 32, 128);
+});
+const ringTex = canvasTexture(128, 128, c => { c.strokeStyle = 'rgba(120,150,195,0.9)'; c.lineWidth = 6; c.beginPath(); c.arc(64, 64, 58, 0, Math.PI * 2); c.stroke(); });
+// instanced sprites that each fade on their own (aAlpha)
+function fadeSprites(tex, geo, count) {
+  const mat = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, side: THREE.DoubleSide, uniforms: { map: { value: tex } },
+    vertexShader: `attribute float aAlpha; varying float vA; varying vec2 vUv;
+      void main(){ vUv = uv; vA = aAlpha; gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
+    fragmentShader: `uniform sampler2D map; varying float vA; varying vec2 vUv;
+      void main(){ vec4 c = texture2D(map, vUv); gl_FragColor = vec4(c.rgb, c.a * vA);
+      #include <colorspace_fragment>
+      }`,
+  });
+  const m = new THREE.InstancedMesh(geo, mat, count);
+  m.alpha = new THREE.InstancedBufferAttribute(new Float32Array(count), 1); geo.setAttribute('aAlpha', m.alpha);
+  m.frustumCulled = false; return m;
+}
+function makeCloud(o, hinge) {
+  const scale = o.h * 1.75 / CLOUD_W;                              // h ≈ how tall the cloud looks
+  const root = new THREE.Group(); root.scale.setScalar(scale);
+  const mat = new THREE.MeshLambertMaterial({ color: CLOUD_GREY.clone(), emissive: new THREE.Color('#5a6270'), emissiveIntensity: .35 });
+  mat.onBeforeCompile = sh => {                                     // a soft white rim so the edge looks fluffy, plus paper grain
+    sh.vertexShader = 'varying vec3 vGrain;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGrain = position;');
+    sh.fragmentShader = 'varying vec3 vGrain;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `
+      float rim = pow(1.0 - abs(dot(normalize(normal), vec3(0.0, 0.0, 1.0))), 2.2);
+      outgoingLight *= 1.0 - smoothstep(0.35, 1.0, rim) * 0.38;                      // a soft dark edge, like a pencil line, so it reads against the sky
+      outgoingLight = mix(outgoingLight, vec3(1.0, 0.99, 0.96), smoothstep(0.0, 0.5, rim) * (1.0 - smoothstep(0.5, 1.0, rim)) * 0.25);
+      vec3 gp = vGrain * 9.0; vec3 gi = floor(gp), gf = fract(gp); gf = gf * gf * (3.0 - 2.0 * gf);
+      #define H(o) fract(sin(dot(gi + o, vec3(12.9898, 78.233, 37.719))) * 43758.5453)
+      float n = mix(mix(mix(H(vec3(0,0,0)), H(vec3(1,0,0)), gf.x), mix(H(vec3(0,1,0)), H(vec3(1,1,0)), gf.x), gf.y),
+                    mix(mix(H(vec3(0,0,1)), H(vec3(1,0,1)), gf.x), mix(H(vec3(0,1,1)), H(vec3(1,1,1)), gf.x), gf.y), gf.z);
+      outgoingLight *= 1.0 + (n - 0.5) * 0.16;                       // uneven, like a wash of grey paint
+      outgoingLight *= 1.0 - smoothstep(0.1, -0.7, normalize(normal).y) * 0.14;   // heavier underneath
+      #include <opaque_fragment>`);
+  };
+  const shape = new THREE.Group(); root.add(shape);                 // squash / hide happen here
+  const blob = new MarchingCubes(40, mat, false, false, 40000);
+  blob.scale.setScalar(CLOUD_BOX); blob.isolation = 80; blob.castShadow = false; blob.raycast = () => {}; shape.add(blob);   // no shadow: it would land on the sky backdrop
+  const hit = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial({ visible: false })); hit.scale.set(2.1, 1.2, 1); shape.add(hit);   // for taps
+  const fc = document.createElement('canvas'); fc.width = 512; fc.height = 256;
+  const faceTex = new THREE.CanvasTexture(fc); faceTex.colorSpace = THREE.SRGBColorSpace;
+  const face = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 1.05), new THREE.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -4 }));
+  face.position.set(0, -0.08, 1.12); face.renderOrder = 2; shape.add(face);
+  // rain lives on the page (in the hinge), so it falls down to the paper
+  const drops = fadeSprites(dropTex, new THREE.PlaneGeometry(0.075, 0.26), 220);
+  const rings = fadeSprites(ringTex, new THREE.PlaneGeometry(0.22, 0.22).rotateX(-Math.PI / 2), 60);
+  hinge.parent.add(drops, rings);
+  o.cl = { root, shape, blob, mat, face, fc, faceTex, drops, rings, scale, hinge, ride: new THREE.Vector3(),
+           cur: { ...CLOUD_MOODS[o.cloud] }, mood: o.cloud, rainMul: 1, carry: 0, squish: 0, hide: 0, bounce: 0, blink: 0, nextBlink: 2,
+           D: Array.from({ length: 220 }, () => ({ alive: false })), R: Array.from({ length: 60 }, () => ({ t: 1 })) };
+  return root;
+}
+function drawCloudFace(cl, s, blink) {
+  const c = cl.fc.getContext('2d'); c.clearRect(0, 0, 512, 256);
+  c.lineCap = 'round'; c.strokeStyle = '#3a2a22';
+  c.fillStyle = 'rgba(244,150,140,0.45)';
+  for (const x of [120, 392]) { c.beginPath(); c.ellipse(x, 160, 42, 26, 0, 0, Math.PI * 2); c.fill(); }
+  c.fillStyle = '#3a2a22';
+  const squeeze = Math.max(s.eyes, blink);
+  for (const [x, dir] of [[180, 1], [332, -1]]) {
+    if (squeeze > 0.5) {
+      c.lineWidth = 9; c.beginPath();
+      if (s.eyes > 0.5) { c.moveTo(x - 20 * dir, 104); c.lineTo(x + 4 * dir, 118); c.lineTo(x - 20 * dir, 132); }
+      else { c.moveTo(x - 20, 120); c.quadraticCurveTo(x, 130, x + 20, 120); }
+      c.stroke();
+    } else {
+      c.beginPath(); c.ellipse(x, 118, 17, 20, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#fff'; c.beginPath(); c.arc(x + 6, 110, 5.5, 0, Math.PI * 2); c.fill(); c.fillStyle = '#3a2a22';
+    }
+    c.lineWidth = 7; c.beginPath();
+    c.moveTo(x - 24 * dir, 72 - s.brows * 3);
+    c.quadraticCurveTo(x, 66 - Math.max(0, s.brows) * 10, x + 24 * dir, 72 + s.brows * 9);   // inner end rises when worried
+    c.stroke();
+  }
+  const curve = s.mouth * 22, w = 34 + Math.max(0, s.mouth) * 10;
+  c.lineWidth = 8; c.beginPath();
+  c.moveTo(256 - w, 178 - curve * 0.3);
+  c.quadraticCurveTo(256, 178 + curve, 256 + w, 178 - curve * 0.3);
+  if (s.open > 0.05) {
+    c.quadraticCurveTo(256, 178 + curve + (s.mouth > 0 ? 28 : -22) * s.open, 256 - w, 178 - curve * 0.3);
+    c.fillStyle = s.mouth > 0 ? '#c9584f' : '#5a3a32'; c.fill(); c.fillStyle = '#3a2a22';
+  }
+  c.stroke();
+  cl.faceTex.needsUpdate = true;
+}
+const tmpM4 = new THREE.Matrix4(), tmpV3 = new THREE.Vector3(), tmpS3 = new THREE.Vector3(), noTurn = new THREE.Quaternion();
+const dropTilt = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, .1));
+function updateCloud(o, t, dt, a) {
+  const cl = o.cl, cur = cl.cur;
+  // story actions
+  if (a && !a.done) {
+    a.done = true;
+    if (a.type === 'squish') cl.squish = 1;
+    if (a.type === 'hide') cl.hide = 1;
+    if (a.type === 'cry') cl.mood = 'cry';
+    if (a.type === 'less') { cl.rainMul = cl.mood === 'less' ? cl.rainMul * .55 : 1; cl.mood = 'less'; cl.squish = .6; }   // each tap: a little less
+    if (a.type === 'cheer') { cl.mood = 'happy'; cl.bounce = 1; }
+  }
+  const goal = CLOUD_MOODS[cl.mood], k = 1 - Math.exp(-dt * 2.2);
+  const tint = STOPS[o.mesh.userData.page]?.mood?.tint; if (tint) cl.tintColor = (cl.tintColor || new THREE.Color()).set(tint);
+  for (const key in cur) cur[key] += (goal[key] - cur[key]) * k;
+  if (!cl.hinge.visible) { cl.drops.visible = cl.rings.visible = false; return; }
+  // body: breathing puffs, squish on tap, hide (shrink + sink), bounce when happy
+  cl.squish = Math.max(0, cl.squish - dt * 3); cl.hide = Math.max(0, cl.hide - dt * .6); cl.bounce = Math.max(0, cl.bounce - dt * 1.2);
+  const hideAmt = Math.sin(Math.min(1, cl.hide) * Math.PI), sq = Math.sin(cl.squish * Math.PI) * .18;
+  cl.shape.scale.set(1 + sq, 1 - sq, 1 + sq).multiplyScalar(1 - hideAmt * .25);
+  cl.shape.position.y = -hideAmt * .3 + Math.abs(Math.sin(cl.bounce * Math.PI * 3)) * cl.bounce * .5;
+  cl.root.position.copy(cl.ride); if (!(o.act && o.act.type === 'ride')) cl.ride.multiplyScalar(Math.max(0, 1 - dt * 2));
+  entranceOffset(o, dt, o.body);
+  if (cl.hinge.visible) {
+    cl.blob.reset();
+    CLOUD_PUFFS.forEach(([x, y, z, r], i) => {
+      const br = 1 + Math.sin(t * 1.6 + i * 1.7) * .035, rn = (r * .97 * br * cur.puff) / (2 * CLOUD_BOX);
+      cl.blob.addBall(.5 + x * cur.puff / (2 * CLOUD_BOX), .5 + y * cur.puff / (2 * CLOUD_BOX), .5 + z / (2 * CLOUD_BOX), rn * rn * (CLOUD_SUB + cl.blob.isolation), CLOUD_SUB);
+    });
+    cl.blob.update();
+  }
+  cl.mat.color.copy(CLOUD_WHITE).lerp(cl.tintColor || CLOUD_GREY, cur.grey);
+  if (t > cl.nextBlink) { cl.blink = .15; cl.nextBlink = t + 2.5 + Math.random() * 2.5; }
+  cl.blink = Math.max(0, cl.blink - dt);
+  drawCloudFace(cl, { ...cur, eyes: Math.max(cur.eyes, hideAmt) }, cl.blink > 0 ? 1 : 0);
+  // rain, in page space: from under the cloud down to the paper
+  const base = cl.hinge.position, top = base.y + o.body.position.y - .35 * cl.scale * 2.2;
+  // the puddles painted on the page floor ripple while it rains
+  cl.pud = (cl.pud || 0) + cur.rain * cl.rainMul * dt * .12;
+  while (cl.pud >= 1) { cl.pud--; const [px, pz, pr] = PUDDLES[Math.floor(Math.random() * PUDDLES.length)], ang = Math.random() * Math.PI * 2, rr = Math.sqrt(Math.random()) * pr;
+    const r = cl.R.find(r => r.t >= 1); if (r) Object.assign(r, { t: 0, x: px + Math.cos(ang) * rr, y: .012, z: pz + Math.sin(ang) * rr * .7, size: .9 }); }
+  cl.carry += cur.rain * cl.rainMul * dt * (cl.hinge.visible ? 1 : 0);
+  while (cl.carry >= 1) {
+    cl.carry--;
+    const d = cl.D.find(d => !d.alive); if (!d) break;
+    const near = Math.random();
+    Object.assign(d, { alive: true, near, x: base.x + o.body.position.x + (Math.random() - .5) * 1.5 * cl.scale * CLOUD_W / 2,
+      y: top, y0: top, z: base.z + (Math.random() - .5) * .5 + near * .3, v: 2.6 + near * 1.4 + Math.random() * .4, size: .7 + near * .5 });
+  }
+  const sh = pageObjects[o.mesh.userData.page]?.lumi?.umb?.shield;          // Lumi's open umbrella catches the drops
+  cl.D.forEach((d, i) => {
+    let al = 0;
+    if (d.alive) {
+      d.y -= d.v * dt; d.x += d.v * dt * .1;
+      let floor = .02;
+      if (sh?.on) { const dd = Math.hypot(d.x - sh.x, d.z - sh.z); if (dd < sh.r) floor = sh.y - (dd / sh.r) ** 2 * sh.h; }
+      if (d.y < floor) { d.alive = false; const r = cl.R.find(r => r.t >= 1); if (r) Object.assign(r, { t: 0, x: d.x, y: floor + .01, z: d.z, size: d.size * (floor > .1 ? .6 : 1) }); }
+      else al = Math.min(1, (d.y0 - d.y) / .25) * (.6 + d.near * .4);
+    }
+    tmpM4.compose(tmpV3.set(d.x || 0, d.y || 0, d.z || 0), dropTilt, tmpS3.setScalar(al ? d.size : 0));
+    cl.drops.setMatrixAt(i, tmpM4); cl.drops.alpha.array[i] = al;
+  });
+  cl.R.forEach((r, i) => {
+    r.t = Math.min(1, r.t + dt / .45);
+    const on = r.t < 1;
+    tmpM4.compose(tmpV3.set(r.x || 0, r.y || .015, r.z || 0), noTurn, tmpS3.setScalar(on ? r.size * (.3 + r.t * .9) : 0));
+    cl.rings.setMatrixAt(i, tmpM4); cl.rings.alpha.array[i] = on ? (1 - r.t) * .9 : 0;
+  });
+  for (const m of [cl.drops, cl.rings]) { m.instanceMatrix.needsUpdate = true; m.alpha.needsUpdate = true; m.visible = cl.hinge.visible; }
+}
+// rain over the whole meadow on rainy pages (not over the book: the cloud has its own)
+const worldRain = { m: fadeSprites(dropTex, new THREE.PlaneGeometry(0.1, 0.42), 700), D: Array.from({ length: 700 }, () => ({ alive: false })), carry: 0 };
+scene.add(worldRain.m);
+function updateWorldRain(dt, amount) {
+  const W = worldRain; W.carry += amount * 420 * dt;
+  while (W.carry >= 1) {
+    W.carry--; const d = W.D.find(d => !d.alive); if (!d) break;
+    let x, z; do { x = BOOK_C.x + (Math.random() - .5) * 26; z = BOOK_C.y - 14 + Math.random() * 18; } while (Math.abs(x - 2) < 3.2 && Math.abs(z) < 3.6);   // never between the camera and the book
+    Object.assign(d, { alive: true, x, z, y: 5 + Math.random() * 3, v: 5 + Math.random() * 2, size: .45 + Math.random() * .35 });
+  }
+  W.D.forEach((d, i) => {
+    let al = 0;
+    if (d.alive) { d.y -= d.v * dt; if (d.y < 0) d.alive = false; else al = Math.min(1, d.y / .6) * .55; }
+    tmpM4.compose(tmpV3.set(d.x || 0, d.y || 0, d.z || 0), dropTilt, tmpS3.setScalar(al ? d.size : 0));
+    W.m.setMatrixAt(i, tmpM4); W.m.alpha.array[i] = al;
+  });
+  W.m.instanceMatrix.needsUpdate = true; W.m.alpha.needsUpdate = true; W.m.visible = amount > .01;
+}
+// petals that drift down over the page at the party
+const petals = (() => {
+  const geo = new THREE.PlaneGeometry(.07, .05), cols = [0xf6c9d8, 0xfff1b8, 0xfbe3ea, 0xffffff];
+  const list = [];
+  for (let i = 0; i < 70; i++) {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: cols[i % cols.length], side: THREE.DoubleSide, transparent: true, opacity: 0 }));
+    m.raycast = () => {}; scene.add(m); list.push({ m, life: 0, x: 0, y: 0, z: 0, vx: 0, vy: 0, s: Math.random() * 9 });
+  }
+  return { list, burst(o) {
+    const c = o.center();
+    list.forEach(p => { p.life = 1; p.x = c.x + (Math.random() - .5) * 3.6; p.y = c.y + 2 + Math.random() * 1.5; p.z = c.z + (Math.random() - .5) * 3; p.vx = (Math.random() - .5) * .4; p.vy = -(.35 + Math.random() * .3); });
+  }, update(dt, t) {
+    list.forEach(p => {
+      if (p.life <= 0) { p.m.material.opacity = 0; return; }
+      p.life -= dt / 6; p.y += p.vy * dt; p.x += (p.vx + Math.sin(t * 2 + p.s) * .25) * dt;
+      p.m.position.set(p.x, Math.max(.02, p.y), p.z); p.m.rotation.set(Math.sin(t * 3 + p.s), t * 1.5 + p.s, Math.cos(t * 2.2 + p.s));
+      p.m.material.opacity = clamp(p.life * 3) * .9;
+    });
+  } };
+})();
+// a rainbow drawn in code: seven soft bands, hidden until the story says "rainbow"
+// the page object is only a handle; the rainbow itself stands in the sky behind the book,
+// big enough to arch over the whole stage, with soft rays of light falling onto the page
+const SKY_RAINBOW = (() => {
+  const g = new THREE.Group(); g.position.set(PW / 2, -.2, -5.2); g.visible = false; scene.add(g);
+  const cols = ['#f08a8a', '#f5b47a', '#f6dc85', '#a8d69a', '#8cc4e0', '#9aa6e3', '#c1a2dc'], R = 4.6, bands = [];
+  cols.forEach((c, i) => {
+    const r = R * (1 - i * .05);
+    const band = new THREE.Mesh(new THREE.RingGeometry(r - R * .048, r, 96, 1, 0, Math.PI),
+      new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    band.renderOrder = 1; g.add(band); bands.push(band);
+  });
+  const rayTex = canvasTexture(64, 256, c => {
+    const gr = c.createLinearGradient(0, 0, 0, 256); gr.addColorStop(0, 'rgba(255,245,215,.9)'); gr.addColorStop(.7, 'rgba(255,240,200,.25)'); gr.addColorStop(1, 'rgba(255,240,200,0)');
+    c.fillStyle = gr; c.fillRect(0, 0, 64, 256);
+    const side = c.createLinearGradient(0, 0, 64, 0); side.addColorStop(0, 'rgba(0,0,0,1)'); side.addColorStop(.3, 'rgba(0,0,0,0)'); side.addColorStop(.7, 'rgba(0,0,0,0)'); side.addColorStop(1, 'rgba(0,0,0,1)');
+    c.globalCompositeOperation = 'destination-out'; c.fillStyle = side; c.fillRect(0, 0, 64, 256);
+  });
+  const rays = [];
+  for (let i = 0; i < 7; i++) {   // long soft beams from the top of the arch down toward the book
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(.9 + Math.random() * .8, 7.5).translate(0, -3.75, 0),
+      new THREE.MeshBasicMaterial({ map: rayTex, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false }));
+    m.position.set((i - 3) * .55, R * .98, .2); m.rotation.set(-.55, 0, (i - 3) * .09); m.renderOrder = 2; g.add(m);
+    rays.push({ m, seed: i * 1.3, base: .05 + Math.random() * .03 });
+  }
+  const dotTex = canvasTexture(32, 32, c => { const gr = c.createRadialGradient(16, 16, 1, 16, 16, 15); gr.addColorStop(0, 'rgba(255,250,230,1)'); gr.addColorStop(1, 'rgba(255,250,230,0)'); c.fillStyle = gr; c.fillRect(0, 0, 32, 32); });
+  const motes = [];                 // slow sparkles drifting down through the light
+  for (let i = 0; i < 40; i++) {
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex, transparent: true, depthWrite: false, opacity: 0, blending: THREE.AdditiveBlending, fog: false }));
+    sp.scale.setScalar(.07 + Math.random() * .06); scene.add(sp);
+    motes.push({ sp, x: Math.random(), y: Math.random(), z: Math.random(), v: .25 + Math.random() * .3, seed: Math.random() * 9 });
+  }
+  return { g, bands, rays, motes, shown: 0, show: 0 };
+})();
+function makeRainbow(o) { o.shown = 0; o.show = 0; return new THREE.Group(); }
+function updateRainbow(o, dt, a) {
+  const Rb = SKY_RAINBOW;
+  if (a && a.type === 'show') { o.show = 1; Rb.show = 1; }
+  if (!o.body.parent.parent.visible && Rb.show) Rb.show = 0;          // page closed: fade it out again
+  if (Rb.show && Rb.t0 == null) { Rb.t0 = performance.now(); Rb.g.visible = true; }
+  if (!Rb.show) Rb.t0 = null;
+  Rb.shown += (Rb.show - Rb.shown) * Math.min(1, dt * .9);
+  const k = Rb.shown; Rb.g.visible = k > .01;
+  const since = Rb.t0 ? (performance.now() - Rb.t0) / 1000 : 0, draw = Rb.show ? smooth(clamp((since - .4) / 3.2)) : 1;   // the arc paints itself left to right
+  if (Rb.show && draw < 1 && Math.abs(draw - (Rb.drawn || 0)) > .01) {
+    Rb.drawn = draw; const R = 4.6;
+    Rb.bands.forEach((b, i) => { const r = R * (1 - i * .05); b.geometry.dispose(); b.geometry = new THREE.RingGeometry(r - R * .048, r, 96, 1, Math.PI * (1 - draw), Math.PI * draw); });
+  }
+  Rb.bands.forEach((b, i) => { b.material.opacity = .55 * clamp(k * 1.7 - i * .1); });
+  if (Rb.show && draw < 1) Rb.motes.forEach((m, i) => { if (i < 12) { const ang = Math.PI * (1 - draw) + (Math.random() - .5) * .05; m.y = -1; m.sp.position.set(PW / 2 + Math.cos(ang) * 4.6 * Rb.g.scale.x, -.2 + Math.sin(ang) * 4.6 * Rb.g.scale.x, -5.2); m.sp.material.opacity = .9; m.sp.visible = true; } });   // sparkles at the painting tip
+  if (Rb.show && since > 3.6 && !Rb.friends) {   // once it is up: the bird flies in, the flowers open, a butterfly appears
+    Rb.friends = true; const P = pageObjects[o.mesh.userData.page] || {};
+    if (P.bird) { P.bird.entering = 0; sfx('chirp'); }
+    ['flowers1', 'flowers2'].forEach((id, i) => P[id] && setTimeout(() => doAction(P[id], 'grow'), i * 300));
+    if (P.fly1) P.fly1.shown = true;
+  }
+  if (!Rb.show) Rb.friends = false;
+  Rb.g.scale.setScalar(.9 + k * .1);
+  const t = performance.now() / 1000;
+  Rb.rays.forEach(r => { r.m.material.opacity = r.base * clamp(k * 1.4 - .3) * (.75 + .25 * Math.sin(t * .7 + r.seed)); });
+  if (Rb.show && draw < 1) return;
+  Rb.motes.forEach(m => {
+    m.y -= m.v * dt * .18; if (m.y < 0) { m.y = 1; m.x = Math.random(); m.z = Math.random(); }
+    m.sp.position.set(-.5 + m.x * 5, .2 + m.y * 3.6, -3 + m.z * 5.5);
+    m.sp.material.opacity = clamp(k * 1.4 - .3) * .8 * Math.sin(m.y * Math.PI) * (.6 + .4 * Math.sin(t * 3 + m.seed));
+    m.sp.visible = Rb.g.visible;
+  });
+}
+
+STOPS.forEach((s, k) => {
+  if (!s.objects) return;
+  const leaf = leaves[k].group;
+  // standing back page: hinged on the back edge, folds forward flat over the page
+  const back = new THREE.Group(); back.position.set(PW / 2, 0.008, -PH / 2 + 0.35); leaf.add(back);
+  const bw = PW - 0.2, bh = bw / 1.3;
+  const bd = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh).translate(0, bh / 2, 0),
+    new THREE.MeshStandardMaterial({ map: backTex(s.back), side: THREE.DoubleSide, roughness: .85 }));
+  bd.castShadow = bd.receiveShadow = true; back.add(bd);
+  popups.push({ hinge: back, k, a: 0, v: 0, flat: +1, stiff: 22, damp: 5, delay: 0 });
+  // cut-outs. Standing ones are hinged at their base and fold backward flat;
+  // flying ones (o.fly) float up off the page to their height instead.
+  // hinge (folding / rising) → body (idle motion + actions) → mesh (the picture)
+  pageObjects[k] = {};
+  s.objects.forEach((o, i) => {
+    const hinge = new THREE.Group(); hinge.position.set(o.x, 0.012 + i * .002, o.z); leaf.add(hinge);
+    const body = new THREE.Group(); hinge.add(body);
+    const mesh = o.model ? new THREE.Group() : o.cloud ? makeCloud(o, hinge) : o.rainbow ? makeRainbow(o) : o.butterfly ? makeButterfly(o) : o.label ? makeLabel(o) : cutout(o.img, o.h);
+    if (o.flip && !o.model) mesh.scale.x = -1;
+    if (o.alt) { mesh.userData.base = loadTex(o.img); mesh.userData.alt = loadTex(o.alt); }
+    if (o.say) { const bub = speechBubble(o.say, o.h); body.add(bub); o.bubble = bub; }
+    Object.assign(mesh.userData, { page: k, id: o.id });
+    mesh.traverse(c => { if (c !== mesh && c.isMesh) c.userData = mesh.userData; });
+    body.add(mesh);
+    popups.push({ hinge, k, a: 0, v: 0, flat: o.fly || o.model ? 0 : -1, fly: o.fly, grow: !!o.model, stiff: 30, damp: 5.5, delay: Math.min(.4, .06 + i * .05) });
+    pageObjects[k][o.id] = { ...o, mesh, body, act: null, seed: i * 1.7 + k,
+      center: () => mesh.getWorldPosition(new THREE.Vector3()).add(new THREE.Vector3(0, o.h * .5 * body.scale.y, 0)) };
+  });
+});
+
+// scenery around the book. Everything folds up out of the ground when the spreading world reaches it.
+const worldProps = [], worldBits = [], candleLights = [];
+let lightLevel = 1, lightGoal = 1;
+const distFromBook = (x, z) => Math.hypot(x - BOOK_C.x, z - BOOK_C.y);
+WORLD.props.forEach((o, i) => {
+  const hinge = new THREE.Group(); hinge.position.set(o.x, 0, o.z); scene.add(hinge);
+  const body = new THREE.Group(); hinge.add(body);
+  const mesh = cutout(o.img, o.h); if (o.flip) mesh.scale.x = -1; body.add(mesh);   // flip = mirrored, so a reused row doesn't repeat
+  worldProps.push({ ...o, mesh, body, act: null, seed: 10 + i * 2.3 });
+  worldBits.push({ hinge, d: distFromBook(o.x, o.z), a: 0, v: 0, fold: true });
+});
+// candles: simple wax sticks + a glowing flame sprite + one warm light per group
+const flameTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d');
+  const gr = g.createRadialGradient(32, 36, 2, 32, 32, 30);
+  gr.addColorStop(0, 'rgba(255,250,220,1)'); gr.addColorStop(.35, 'rgba(255,190,90,.9)'); gr.addColorStop(1, 'rgba(255,120,40,0)');
+  g.fillStyle = gr; g.fillRect(0, 0, 64, 64); return new THREE.CanvasTexture(c);
+})();
+const waxMat = new THREE.MeshStandardMaterial({ color: 0xf3e6cf, roughness: .6, emissive: 0x4a2a10, emissiveIntensity: .4 });
+const flames = [];
+WORLD.candles.forEach(([x, z], i) => {
+  const grp = new THREE.Group(); grp.position.set(x, 0, z); scene.add(grp);
+  [[0, 0, .55], [.28, .12, .38], [-.22, .2, .3]].forEach(([dx, dz, h]) => {
+    const wax = new THREE.Mesh(new THREE.CylinderGeometry(.09, .1, h, 14), waxMat);
+    wax.position.set(dx, h / 2, dz); wax.castShadow = true; grp.add(wax);
+    const fl = new THREE.Sprite(new THREE.SpriteMaterial({ map: flameTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+    fl.layers.enable(GLOW_LAYER);
+    fl.position.set(dx, h + .1, dz); fl.scale.set(.22, .32, 1); grp.add(fl); flames.push({ fl, seed: i * 3 + dx * 10 });
+  });
+  const light = new THREE.PointLight(0xffa04a, 0, 7, 1.6); light.position.set(0, .9, .2); grp.add(light);
+  candleLights.push(light);
+  worldBits.push({ hinge: grp, d: distFromBook(x, z), a: 0, v: 0, fold: false });
+});
+function worldReact(key) {
+  const [id, act] = key.split('/');
+  const r = WORLD.react[key] ?? Object.entries(WORLD.react).find(([k]) => k.includes('*') && id.startsWith(k.split('*')[0]) && k.endsWith('/' + act))?.[1];
+  if (r === 'leaves') gust(Math.random() < .5 ? -1 : 1);
+  if (r === 'dim') lightGoal = .3;
+}
+
+/* ============ 4a. rigged 3D characters ============
+   A rigged model has a skeleton inside and its own animation clips (the fox has
+   Survey = looks around, Walk, Run). Each page gets its own copy + "mixer" that plays the clips. */
+const MODELS = { lumi: { url: 'models/lumi-web.glb', face: 0, warm: .3, idle: 'Idle_02', walk: 'Confident_Strut', run: 'Running',
+                         acts: { wave: 'Wave_One_Hand', bigwave: 'Big_Wave_Hello', look: 'Look_Around_Dumbfounded', jump: 'Jump_with_Arms_Open',
+                                 talk: 'Discuss_While_Moving', clap: 'Clapping_Run', victory: 'victory' },   // her Meshy picks (2026-11-02)
+                         from: { Clapping_Run: 8.2, victory: 2.6 },   // long clips: start at the good part (the peekaboo, the arms-up cheer)
+                         hold: 'Walk_with_Umbrella',   // arm pose while holding the umbrella (frozen on one frame)
+                         legDamp: .35 } };             // short bear legs: keep only a third of the human leg swing so they don't cross
+// sitting is done in code (the Meshy sit is a chair sit): thighs forward, hips down, with a little bounce
+const LEG_BONES = ['LeftUpLeg', 'LeftLeg', 'LeftFoot', 'RightUpLeg', 'RightLeg', 'RightFoot'];
+const SIT = { thigh: 1.5, spread: .22, foot: -.5, drop: .1, secs: .8 };
+const tmpQ = new THREE.Quaternion(), tmpE = new THREE.Euler();
+// a soft gradient for the toon shading: a few bands with gentle edges, not hard cel steps
+const bandTex = canvasTexture(256, 1, c => {
+  const B = LOOK.paint.bands, g = c.createLinearGradient(0, 0, 256, 0);
+  const v = x => `rgb(${x * 255},${x * 255},${x * 255})`;
+  g.addColorStop(0, v(B[0])); g.addColorStop(.3, v(B[0])); g.addColorStop(.42, v(B[1])); g.addColorStop(.62, v(B[1])); g.addColorStop(.74, v(B[2])); g.addColorStop(1, v(B[2]));
+  c.fillStyle = g; c.fillRect(0, 0, 256, 1);
+});
+bandTex.colorSpace = THREE.NoColorSpace; bandTex.minFilter = bandTex.magFilter = THREE.LinearFilter;
+const outlineMat = new THREE.MeshBasicMaterial({ color: LOOK.paint.outline, side: THREE.BackSide, transparent: true, opacity: LOOK.paint.outlineAlpha });
+outlineMat.onBeforeCompile = sh => {   // inverted hull: the same skinned mesh, pushed out a little along its normals
+  sh.vertexShader = sh.vertexShader.replace('#include <project_vertex>', `transformed += normalize(objectNormal) * ${LOOK.paint.outlineWidth.toFixed(4)};\n#include <project_vertex>`);
+};
+const gltf = new GLTFLoader();
+for (const [name, M] of Object.entries(MODELS)) {
+  gltf.load(M.url, g => {
+    const size = new THREE.Box3().setFromObject(g.scene).getSize(new THREE.Vector3());
+    const minY = new THREE.Box3().setFromObject(g.scene).min.y;
+    for (const objs of pageObjects) if (objs) for (const o of Object.values(objs)) {
+      if (o.model !== name) continue;
+      const m = cloneRigged(g.scene), s = o.h / size.y;
+      m.scale.setScalar(s); m.position.y = -minY * s;
+      const turn = new THREE.Group(); turn.rotation.y = M.face; turn.add(m);   // make it face the reader
+      o.warmMats = []; const outlines = [];
+      m.traverse(c => { if (c.isMesh) { c.castShadow = true; c.frustumCulled = false; c.userData = o.mesh.userData;
+        const old = c.material;   // painted look: soft toon bands, the texture kept, a warm glow that fades on rainy pages
+        c.material = TOON_ON
+          ? new THREE.MeshToonMaterial({ map: old.map, color: LOOK.paint.tint, gradientMap: bandTex, emissive: new THREE.Color(0xfff2e0), emissiveMap: old.map, emissiveIntensity: M.warm || 0 })
+          : new THREE.MeshStandardMaterial({ map: old.map, roughness: 1, metalness: 0, emissive: new THREE.Color(0xfff2e0), emissiveMap: old.map, emissiveIntensity: M.warm || 0 });   // soft: the original smooth shading, just lit and papered like the rest
+        o.warmMats.push(c.material);
+        if (OUTLINE_ON) { const ol = c.clone(); ol.material = outlineMat; ol.castShadow = false; ol.userData = o.mesh.userData; outlines.push([c, ol]); } } });
+      outlines.forEach(([c, ol]) => c.parent.add(ol));
+      o.mesh.add(turn);
+      const hit = new THREE.Mesh(new THREE.CapsuleGeometry(o.h * .55, o.h * .9, 4, 8), new THREE.MeshBasicMaterial({ visible: false }));
+      hit.position.y = o.h * .95; hit.userData = o.mesh.userData; o.mesh.add(hit);   // tap target (he really stands ~2× o.h tall)
+      o.mixer = new THREE.AnimationMixer(m);
+      o.clips = Object.fromEntries(g.animations.map(a => [a.name, o.mixer.clipAction(a)]));
+      o.names = M; o.clip = null;
+      const bone = n => m.getObjectByName('mixamorig' + n);
+      o.rig = { hips: bone('Hips'), hand: bone('RightHand'), spine: bone('Spine1'), head: bone('Head'), legs: LEG_BONES.map(bone) };
+      o.rig.spine0 = o.rig.spine.quaternion.clone(); o.rig.head0 = o.rig.head.quaternion.clone();
+      o.slumpNow = o.slump || 0; o.slumpGoal = o.slump || 0; o.lookAt = null;
+      o.mouth = makeFace(bone('Head'), o.warmMats[0]); o.mouth.set(o.expr || 'neutral');   // mouth stickers (lumi-face.js); o.face is the facing angle
+      o.rig.rest = o.rig.legs.map(b => b.quaternion.clone()); o.rig.hips0 = o.rig.hips.position.clone();
+      if (o.umbrella) { o.umb = makeUmbrella(o.umbrella === 'open' ? 1 : 0); o.umb.group.scale.setScalar(o.h / .72); o.body.add(o.umb.group); o.clips[M.hold].timeScale = 0; }   // the umbrella was sized for h .72
+      if (o.pose && M.poses?.[o.pose]) {
+        o.poseClip = M.poses[o.pose];
+        const pa = o.clips[o.poseClip]; pa.setLoop(THREE.LoopOnce); pa.clampWhenFinished = true;
+      }
+      setClip(o, o.poseClip || M.idle);
+    }
+  });
+}
+function setClip(o, name) {
+  if (!o.clips || o.clip === name || !o.clips[name]) return;
+  o.clips[name].reset().fadeIn(.35).play();
+  if (o.names?.from?.[name]) o.clips[name].time = o.names.from[name];
+  if (name === o.poseClip && o.clip) o.clips[name].time = o.clips[name].getClip().duration;   // already sitting: go straight to the held pose
+  if (o.clip) o.clips[o.clip].fadeOut(.35);
+  o.clip = name;
+}
+function animateModel(o, dt) {
+  const b = o.body; b.position.set(0, 0, 0); b.rotation.set(0, 0, 0); b.scale.set(1, 1, 1);
+  let clip = o.umb ? o.names.hold : o.poseClip || o.names?.idle;
+  const REST_YAW = o.face ?? .45;             // stand at a 3/4 angle so you see the face and the body
+  b.rotation.y = REST_YAW;
+  if (o.enter) {                               // walking in from the page edge
+    entranceOffset(o, dt, b);
+    if (o.entering != null && o.entering < 1) { clip = o.names.walk; b.rotation.y = (o.x > PW / 2 ? -1 : 1) * Math.PI / 2 * (1 - smooth(clamp((o.entering - .75) / .25))) + REST_YAW * smooth(clamp((o.entering - .75) / .25)); }
+  }
+  const a = o.act;
+  if (a) {
+    a.t += dt; const p = clamp(a.t / a.dur);
+    if (a.type === 'run' || a.type === 'walk' || a.type === 'fly') {
+      const e = outBack(p), side = o.x > PW / 2 ? -1 : 1, far = a.type === 'walk' ? .9 : 1.5;
+      b.position.x = e * far * side;
+      // turn sideways to travel, turn around at the halfway point, face the reader again at the end
+      const heading = (p < .5 ? side : -side) * Math.PI / 2;
+      b.rotation.y = lerp(REST_YAW, heading, smooth(clamp(e * 3)));
+      if (e > .05) clip = a.type === 'walk' ? o.names?.walk : o.names?.run;
+    }
+    if (o.names?.acts?.[a.type]) { clip = o.names.acts[a.type]; b.rotation.y = lerp(REST_YAW, 0, smooth(clamp(Math.min(p, 1 - p) * 5))); }   // face the reader for a gesture
+    if (a.type === 'hop') { b.position.y = Math.sin(Math.PI * p) * .45; b.rotation.x = -Math.sin(Math.PI * p) * .25; }
+    if (a.type === 'grow') b.scale.setScalar(1 + Math.sin(Math.PI * p) * .2);
+    if (a.type === 'wiggle') b.rotation.z = Math.sin(p * Math.PI * 6) * .12 * (1 - p);
+    if (a.type === 'spin') b.rotation.y = REST_YAW + easeInOut(p) * Math.PI * 2;
+    if (a.type === 'sit' && a.t <= dt) o.sitT = 0;
+    if (a.type === 'pushed') {                 // the gust shoves him sideways; he staggers, leans, and gets his feet back
+      const d = o.pushDir || 1, e = outBack(p);
+      b.position.x += d * .9 * e; b.rotation.z = -d * .4 * Math.sin(Math.PI * Math.min(1, p * 1.4)); b.position.y += Math.abs(Math.sin(p * Math.PI * 4)) * .08 * e;
+      clip = o.names.acts.look;
+    }
+    if (a.type === 'ride') {                   // up onto the cloud, one loop around the page, and down again
+      const C = pageObjects[o.mesh.userData.page]?.cloud;
+      if (C) {
+        const ox = C.x - o.x, oy = (C.fly || 0) + .35 * C.body.scale.y, oz = C.z - o.z;
+        let dx = 0, dy = 0, dz = 0;
+        if (p < .2) { const q = smooth(p / .2); b.position.set(ox * q, oy * q + Math.sin(q * Math.PI) * .4, oz * q); clip = o.names.acts.jump; }
+        else if (p < .85) { const q = (p - .2) / .65, w = Math.sin(q * Math.PI);
+          dx = Math.sin(q * Math.PI * 2) * 1.5 * w; dy = Math.sin(q * Math.PI) * .15 - .25 * w; dz = (1 - Math.cos(q * Math.PI * 2)) * .9 * w;
+          b.position.set(ox + dx, oy + dy, oz + dz); b.rotation.y = REST_YAW + Math.sin(q * Math.PI * 2) * .5; b.rotation.z = -Math.cos(q * Math.PI * 2) * .12 * w; }
+        else { const q = smooth((p - .85) / .15); b.position.set(ox * (1 - q), oy * (1 - q) + Math.sin(q * Math.PI) * .3, oz * (1 - q)); clip = o.names.acts.jump; }
+        C.cl.ride.set(dx, dy, dz);
+        if (a.t <= dt) { const B = pageObjects[o.mesh.userData.page]?.bird; if (B) doAction(B, 'fly'); sfx('twirl'); clearFocus(); }
+      }
+    }
+    if (a.type === 'party') {                  // everyone joins in, one after another, then The End
+      clip = o.names.acts.victory;
+      if (a.t <= dt) {
+        const P = pageObjects[o.mesh.userData.page] || {}, order = ['cloud', 'bird', 'frog', 'flowers1', 'flowers2'];
+        order.forEach((id, i) => P[id] && setTimeout(() => doAction(P[id], id === 'cloud' ? 'cheer' : id === 'bird' ? 'fly' : id === 'frog' ? 'hop' : 'grow'), 350 + i * 320));
+        petals.burst(o); setTimeout(() => { if (P.end) { P.end.shown = true; sfx('rainbow'); } }, 2600); setTimeout(showWordList, 4200);
+      }
+    }
+    if (a.type === 'sulk') { o.slumpGoal = 1; b.rotation.z += Math.sin(p * Math.PI * 5) * .05 * (1 - p); }   // "I can't fix it": sinks lower, a little shake
+    if (a.type === 'open' && o.umb) { if (o.umb.goal) o.act = { type: 'wiggle', t: 0, dur: 1 }; else { o.umb.goal = 1; sfx('pop'); } }
+    if (p >= 1) o.act = null;
+  }
+  if (o.pose === 'sit' && !a) b.rotation.z = Math.sin(performance.now() / 900) * .025;   // sitting: rock gently
+  o.warmMats?.forEach(mt => mt.emissiveIntensity = (o.names.warm || 0) * (1 - moodCool * .85));
+  if (o.chase && !a) {                        // runs after the dragged sun, never quite catching it
+    const S = pageObjects[o.mesh.userData.page]?.[o.chase]; const want = S?.dragOff ? clamp(S.dragOff.x - .4, -2.4, .6) : 0;
+    o.chaseX = o.chaseX || 0; const dxc = want - o.chaseX, step = Math.sign(dxc) * Math.min(Math.abs(dxc), dt * 1.4);
+    o.chaseX += step; b.position.x += o.chaseX;
+    if (Math.abs(dxc) > .05) { clip = o.names.walk; b.rotation.y = step > 0 ? Math.PI / 2 : -Math.PI / 2; }
+  }
+  setClip(o, clip);
+  b.scale.multiplyScalar(1 + hoverAmount(o, dt) * .08);
+  // the head/spine tilts are added on top of the animation every frame; when a clip doesn't move those bones
+  // (the paused umbrella pose), the add would pile up and spin the head, so put back the clip's own values first
+  const r = o.rig;
+  if (r?.headRaw) { r.head.quaternion.copy(r.headRaw); r.spine.quaternion.copy(r.spineRaw); }
+  o.mixer?.update(dt);
+  if (r) { r.headRaw = (r.headRaw || new THREE.Quaternion()).copy(r.head.quaternion); r.spineRaw = (r.spineRaw || new THREE.Quaternion()).copy(r.spine.quaternion); }
+  poseLegs(o, dt); poseSlump(o, dt);
+  o.mouth?.update(dt, performance.now() / 1000);
+  if (o.umb) updateUmbrella(o, dt);
+}
+function poseLegs(o, dt) {
+  const r = o.rig; if (!r) return;
+  if (o.pose !== 'sit') { if (o.names.legDamp) r.legs.forEach((b, i) => b.quaternion.slerp(r.rest[i], 1 - o.names.legDamp)); return; }
+  o.sitT = Math.min(1, (o.sitT ?? 0) + dt / SIT.secs);
+  const p = o.sitT, e = smooth(clamp(p / .55)) + Math.sin(clamp((p - .4) / .6) * Math.PI * 2) * .1 * (1 - p);   // plop, bounce, settle
+  r.legs.forEach((b, i) => {
+    const side = i < 3 ? 1 : -1, k = i % 3;
+    b.quaternion.copy(r.rest[i]);
+    if (k === 0) b.quaternion.multiply(tmpQ.setFromEuler(tmpE.set(SIT.thigh * e, 0, side * SIT.spread * e)));
+    if (k === 2) b.quaternion.multiply(tmpQ.setFromEuler(tmpE.set(SIT.foot * e, 0, 0)));
+  });
+  r.hips.position.copy(r.hips0); r.hips.position.y -= SIT.drop * e;
+}
+// slump: head and shoulders hang forward (page 7, until Frog speaks)
+function poseSlump(o, dt) {
+  const r = o.rig; if (!r) return;
+  o.slumpNow += (o.slumpGoal - o.slumpNow) * Math.min(1, dt * 2.2);
+  const k = o.slumpNow;
+  r.spine.quaternion.multiply(tmpQ.setFromEuler(tmpE.set(.38 * k, 0, 0)));
+  r.head.quaternion.multiply(tmpQ.setFromEuler(tmpE.set(.42 * k, 0, 0)));
+  // after Frog speaks: look down at him, a little nod, then both look up at the cloud together
+  o.hx ??= 0; o.hy ??= 0; let gx = -pointer.y * .12, gy = pointer.x * .28 * (o.flip ? -1 : 1);   // follows the reader's hand a little
+  if (o.lookUp && o.act?.type === 'look') { gx = -.85; gy = .2; }                                     // "looked up": chin up at the sky
+  if (o.lookAt?.saidAt) {
+    const t = (performance.now() - o.lookAt.saidAt) / 1000;
+    if (t < 3.2) { gx = .3; gy = -.55; if (t > 1.2 && t < 2.0) gx += Math.sin((t - 1.2) / .8 * Math.PI * 2) * .12; }   // down at Frog, nod
+    else { gx = -.32; gy = -.15; }                                                                                       // up at the cloud
+  }
+  o.hx += (gx - o.hx) * Math.min(1, dt * 3); o.hy += (gy - o.hy) * Math.min(1, dt * 3);
+  r.head.quaternion.multiply(tmpQ.setFromEuler(tmpE.set(o.hx, o.hy, 0)));
+}
+/* the umbrella: made in code, held in Lumi's right hand, pops open on "opened his umbrella".
+   Its canopy is a rain shield: drops that hit it splash on top instead of on the page. */
+const UMB = { r: .62, rise: .3, shaft: 1.2, colors: ['#f2cf5e', '#f7df8c'], inside: '#d9a83c', wood: '#8a5a36' };
+function makeUmbrella(open) {
+  const group = new THREE.Group(); group.rotation.set(-.32, 0, .2);       // lean back and out, so the canopy sits over his head, not his face
+  const geo = new THREE.SphereGeometry(1, 8, 4, 0, Math.PI * 2, 0, 1.05).toNonIndexed().translate(0, -1, 0);
+  const pos = geo.attributes.position, col = [], cA = new THREE.Color(UMB.colors[0]), cB = new THREE.Color(UMB.colors[1]);
+  for (let i = 0; i < pos.count; i += 3) {                                // alternate panel colours
+    const x = (pos.getX(i) + pos.getX(i + 1) + pos.getX(i + 2)) / 3, z = (pos.getZ(i) + pos.getZ(i + 1) + pos.getZ(i + 2)) / 3;
+    const c = Math.floor(((Math.atan2(z, x) + Math.PI) / (Math.PI * 2)) * 8) % 2 ? cA : cB;
+    for (let j = 0; j < 3; j++) col.push(c.r, c.g, c.b);
+  }
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals();
+  const canopy = new THREE.Group(); canopy.position.y = UMB.shaft; group.add(canopy);
+  const outer = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: .85, flatShading: true, side: THREE.FrontSide }));
+  const inner = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: UMB.inside, roughness: .9, flatShading: true, side: THREE.BackSide }));
+  const dome = new THREE.Group(); dome.add(outer, inner); dome.scale.set(UMB.r / .87, UMB.rise / .5, UMB.r / .87); canopy.add(dome);   // .87 / .5 = rim radius / depth of the unit dome
+  const wood = new THREE.MeshStandardMaterial({ color: UMB.wood, roughness: .7 });
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(.016, .016, UMB.shaft + .16, 8), wood); shaft.position.y = (UMB.shaft - .16) / 2; group.add(shaft);
+  const hook = new THREE.Mesh(new THREE.TorusGeometry(.06, .016, 6, 14, Math.PI), wood); hook.rotation.z = Math.PI; hook.position.set(.06, -.16, 0); group.add(hook);
+  const tip = new THREE.Mesh(new THREE.SphereGeometry(.03, 8, 6), wood); tip.position.y = UMB.shaft + .03; group.add(tip);
+  group.traverse(c => { if (c.isMesh) { c.castShadow = true; c.raycast = () => {}; } });
+  return { group, canopy, dome, top: tip, x: open, v: 0, goal: open, shield: { on: false } };
+}
+function updateUmbrella(o, dt) {
+  const u = o.umb, r = o.rig;
+  u.v += ((u.goal - u.x) * 120 - u.v * 9) * dt; u.x += u.v * dt;      // springy pop open
+  const k = Math.max(0, u.x);
+  u.canopy.scale.set(lerp(.13, 1, k), lerp(2.6, 1, Math.min(1, k)), lerp(.13, 1, k));   // closed = furled along the shaft
+  r.hand.updateWorldMatrix(true, false);
+  u.group.position.copy(o.body.worldToLocal(r.hand.getWorldPosition(tmpV3)));
+  const leaf = o.body.parent.parent;
+  u.top.getWorldPosition(tmpV3); leaf.worldToLocal(tmpV3);
+  const us = u.group.scale.x;
+  Object.assign(u.shield, { on: k > .7, x: tmpV3.x, y: tmpV3.y, z: tmpV3.z, r: UMB.r * us * Math.min(1, k), h: UMB.rise * us });
+}
+
+
+// a tiny butterfly: two wings that flap, wandering around its spot
+function makeButterfly(o) {
+  const g = new THREE.Group(), mat = new THREE.MeshBasicMaterial({ color: o.butterfly, side: THREE.DoubleSide, transparent: true, opacity: .95 });
+  const wing = () => new THREE.Mesh(new THREE.CircleGeometry(.07, 10).scale(1, .75, 1).translate(.065, 0, 0), mat);
+  const L = wing(), R = wing(); L.rotation.y = Math.PI; g.add(L, R);
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(.012, .07, 3, 6), new THREE.MeshBasicMaterial({ color: 0x5a4a40 })); g.add(body);
+  g.rotation.x = -Math.PI / 2; const root = new THREE.Group(); root.add(g);
+  g.traverse(c => c.raycast = () => {});
+  o.wings = [L, R]; o.h = o.h || .2; root.scale.setScalar(o.enterOn ? 0.001 : 1);
+  return root;
+}
+function updateButterfly(o, t, dt) {
+  const b = o.body, ts = t * 1.3 + o.seed;
+  b.position.set(Math.sin(ts * .7) * .5 + Math.sin(ts * 1.9) * .15, Math.sin(ts * 1.1) * .25 + Math.cos(ts * 2.7) * .08, Math.cos(ts * .5) * .35);
+  b.rotation.y = Math.atan2(Math.cos(ts * .7) * .35, -Math.sin(ts * .5) * .17);
+  const flap = Math.sin(t * 22 + o.seed) * .9;
+  o.wings[0].rotation.y = Math.PI + flap; o.wings[1].rotation.y = -flap;
+  if (o.enterOn) { const g = o.shown ? 1 : 0.001, sc = o.mesh.scale.x; o.mesh.scale.setScalar(sc + (g - sc) * Math.min(1, dt * 4)); }
+}
+// a little paper card with a handwritten word (The End), hidden until the story shows it
+function makeLabel(o) {
+  const tex = canvasTexture(512, 256, c => {
+    c.fillStyle = '#fbf4e4'; c.strokeStyle = '#5a4a40'; c.lineWidth = 5; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(36, 60); c.lineTo(476, 48); c.lineTo(480, 200); c.lineTo(40, 210); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#5a4a40'; c.font = '700 96px Caveat, cursive'; c.textAlign = 'center'; c.fillText(o.label, 256, 160);
+  });
+  document.fonts.load('700 60px Caveat').then(() => { tex.image.getContext('2d').clearRect(0, 0, 512, 256); const c = tex.image.getContext('2d');
+    c.fillStyle = '#fbf4e4'; c.strokeStyle = '#5a4a40'; c.lineWidth = 5; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(36, 60); c.lineTo(476, 48); c.lineTo(480, 200); c.lineTo(40, 210); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#5a4a40'; c.font = '700 96px Caveat, cursive'; c.textAlign = 'center'; c.fillText(o.label, 256, 160); tex.needsUpdate = true; });
+  const w = 1.5, m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  m.position.set(0, o.h + .4, 0); m.rotation.x = -.25; m.scale.setScalar(0.001); m.raycast = () => {}; m.renderOrder = 3;
+  return m;
+}
+// a little torn-paper speech bubble with a handwritten line, hidden until the character speaks
+function speechBubble(text, h) {
+  const draw = c => {
+    c.fillStyle = '#fbf4e4'; c.strokeStyle = '#5a4a40'; c.lineWidth = 5; c.lineJoin = 'round';
+    c.beginPath(); c.moveTo(40, 40); for (let x = 40; x <= 472; x += 48) c.lineTo(x + 24, 40 + (x % 96 ? 5 : -4));
+    c.lineTo(472, 170); c.lineTo(150, 176); c.lineTo(110, 230); c.lineTo(120, 178); c.lineTo(40, 172); c.closePath(); c.fill(); c.stroke();
+    c.fillStyle = '#3b2a1e'; c.font = '700 60px Caveat, cursive'; c.textAlign = 'center'; c.fillText(text, 256, 128);
+  };
+  const tex = canvasTexture(512, 256, draw);
+  document.fonts.load('700 60px Caveat').then(() => { const c = tex.image.getContext('2d'); c.clearRect(0, 0, 512, 256); draw(c); tex.needsUpdate = true; });
+  const w = Math.max(1.1, h * 2.2), m = new THREE.Mesh(new THREE.PlaneGeometry(w, w / 2), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
+  m.position.set(w * .25, h * 1.15 + w * .2, .05); m.scale.setScalar(0.001); m.raycast = () => {}; m.renderOrder = 3;
+  return m;
+}
+// entrances: when a page opens, things come onto it instead of just standing there
+// (walk: from the nearest page edge · fly: swoops in from high up · drift: floats in from the side)
+function entranceOffset(o, dt, b) {
+  if (!o.enter) return;
+  if (o.entering == null) { b.scale.setScalar(0.001); return; }                 // not yet: hidden
+  o.entering = Math.min(1, o.entering + dt / (o.enter === 'walk' ? 2.4 : o.enter === 'fly' ? 2.6 : 3.2));
+  const p = o.entering, r = 1 - smooth(p), side = o.x > PW / 2 ? 1 : -1;
+  if (o.enter === 'walk') { b.position.x += side * 2.2 * r; }
+  if (o.enter === 'fly') { b.position.x += side * 2.4 * r; b.position.y += 1.4 * r + Math.sin(p * Math.PI * 3) * .25 * r; b.scale.y *= 1 + Math.sin(p * 40) * .15 * r; b.scale.x *= p < .9 ? -side : 1; }
+  if (o.enter === 'drift') { b.position.x += side * 2.0 * r; b.position.y += Math.sin(p * Math.PI * 2) * .12 * r; }
+}
+function startEntrances(k) {
+  for (const o of Object.values(pageObjects[k] || {})) {
+    if (o.enter && !o.enterOn && o.entering == null) { o.entering = 0; if (o.enter === 'walk') sfx('patter'); if (o.enter === 'fly') sfx('chirp'); }
+  }
+}
+// the target phrases, gathered at the end of the story (each knows its page and what to replay there)
+const WORD_LIST = [   // word, 中文, n (thing) | v (action), the sentence from the book (*word* = highlighted), page, object, action to replay there
+  ['cloud', '云朵', 'n', 'He saw a little grey *cloud*, all alone.', 2, 'cloud', 'wiggle'],
+  ['hill', '小山坡', 'n', 'Lumi lives on a little green *hill*.', 1, 'flowers1', 'grow'],
+  ['umbrella', '雨伞', 'n', 'So Lumi opened his *umbrella*.', 8, 'lumi', 'open'],
+  ['rainbow', '彩虹', 'n', 'And look, a *rainbow* came out!', 10, 'rainbow', 'show'],
+  ['frog', '青蛙', 'n', '"You don\'t have to fix it," said *Frog*.', 7, 'frog', 'say'],
+  ['joke', '笑话', 'n', 'Lumi told a *joke*.', 5, 'lumi', 'talk'],
+  ['look up', '抬头看', 'v', 'One morning, Lumi *looked up*.', 2, 'lumi', 'look'],
+  ['blow away', '吹走', 'v', 'He tried to *blow* it *away*.', 4, 'cloud', 'fly'],
+  ['make a silly face', '做鬼脸', 'v', 'He *made a silly face*.', 5, 'lumi', 'clap'],
+  ['sit down', '坐下', 'v', 'Lumi *sat down*.', 7, 'lumi', 'sit'],
+  ['stay with', '陪着', 'v', '"Just *stay with* it."', 7, 'frog', 'say'],
+  ['cheer up', '开心起来', 'v', 'Slowly, the cloud *cheered up*.', 10, 'cloud', 'cheer'],
+];
+const wordListEl = document.getElementById('wordlist');
+WORD_LIST.forEach(([word, zh, kind, ex, page, id, act]) => {
+  const li = document.createElement('li');
+  li.innerHTML = `<span class="tag ${kind}">${kind === 'n' ? 'THING' : 'ACTION'}</span><img src="assets/lumi-book/words/${word.replace(/ /g, '-')}.jpg" alt="">`
+    + `<b>${word}</b><span class="zh">${zh}</span><div class="ex">${ex.replace(/\*([^*]+)\*/g, '<em>$1</em>')}</div>`;
+  li.onclick = () => { hideWordList(); goTo(page); const wait = () => anim ? setTimeout(wait, 200) : setTimeout(() => { const o = pageObjects[page]?.[id]; if (o) { focusOn(o, { hold: 3 }); doAction(o, act); } }, 900); wait(); };
+  wordListEl.querySelector(kind === 'n' ? '.wl-n' : '.wl-v').appendChild(li);
+});
+wordListEl.querySelector('.wl-close').onclick = () => hideWordList();
+function showWordList() { wordListEl.hidden = false; requestAnimationFrame(() => wordListEl.classList.add('show')); sfx('chime'); }
+function hideWordList() { wordListEl.classList.remove('show'); setTimeout(() => wordListEl.hidden = true, 600); }
+/* ============ 4b. making things alive: idle loops + actions ============ */
+const ACT_SECONDS = { walk: 4, hop: .8, wiggle: 1, grow: 1.1, spin: 1.3, float: 3.2, fly: 3.4, run: 2.8, glow: 2,
+                      wave: 2.8, bigwave: 3.4, look: 3.6, jump: 2.4, squish: .6, hide: 1.8, cry: .3, less: .3, cheer: 1.8, show: 1.6, sit: .8, open: .3, sulk: 1.2, say: 1.6, laugh: 1, pushed: 1.6, ride: 6, party: 3.4, talk: 3.2, clap: 3, victory: 3.4 };
+function doAction(obj, type) {
+  if (obj.members) {                                                 // a group: everyone does it, one after another
+    obj.members.forEach((m, i) => setTimeout(() => doAction(m, type), i * 130));
+    return;
+  }
+  if (type && type.startsWith('magic')) { runMagic(type.split(':')[1] || WORLD.magic.default, obj); return; }
+  if (obj.cloud && type === 'ride') { const L = pageObjects[obj.mesh.userData.page]?.lumi; if (L) return doAction(L, 'ride'); }   // tap the cloud: Lumi rides it
+  if (!type || !ACT_SECONDS[type]) type = 'grow';
+  obj.act = { type, t: 0, dur: ACT_SECONDS[type] };
+  sfx(obj.snd?.[type] || WORLD.sfx[type]);                           // an object can have its own voice
+  if (obj.id) worldReact(obj.id + '/' + type);                      // the world answers the story
+}
+// a link can point at one object ("bat1") or a group ("bat*"); a group acts like one object for the camera
+function resolveTarget(link) {
+  const objs = pageObjects[target]; if (!objs || !link) return null;
+  if (!link.endsWith('*')) return objs[link] || null;
+  const members = Object.values(objs).filter(o => o.id.startsWith(link.slice(0, -1)));
+  if (!members.length) return null;
+  const box = new THREE.Box3();
+  return { members, fly: members.some(m => m.fly),
+    get act() { return members.some(m => m.act); },
+    get h() { box.makeEmpty(); members.forEach(m => box.expandByPoint(m.center())); return Math.max(...members.map(m => m.h)) + box.getSize(tmpA).length() * .45; },
+    center: () => members.reduce((c, m) => c.add(m.center()), new THREE.Vector3()).divideScalar(members.length) };
+}
+
+/* ============ magic moments: big effects a story word can trigger (magic:burst, jump, flash, rain) ============ */
+const magicSparks = [];
+function runMagic(kinds, obj) {
+  sfx(WORLD.sfx.magic);
+  for (const kind of kinds.split('+')) {
+    if (kind === 'burst') {                                          // sparkles explode out of the object
+      const c = obj.center();
+      for (let i = 0; i < 26; i++) {
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, color: LOOK.sparkle.color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
+        sp.layers.enable(GLOW_LAYER);
+        sp.position.copy(c); scene.add(sp);
+        const a = Math.random() * Math.PI * 2, u = Math.random() * 2 - 1, sp3 = 1.5 + Math.random() * 2;
+        magicSparks.push({ sp, v: new THREE.Vector3(Math.cos(a) * Math.sqrt(1 - u * u), Math.abs(u) + .3, Math.sin(a) * Math.sqrt(1 - u * u)).multiplyScalar(sp3), life: 1 });
+      }
+      if (!obj.members) { obj.act = null; doAction(obj, 'hop'); }
+    }
+    if (kind === 'jump') Object.values(pageObjects[target] || {}).forEach((o, i) => setTimeout(() => doAction(o, 'hop'), 150 + i * 90));
+    if (kind === 'flash') { const fl = document.getElementById('flash'); fl.classList.remove('go'); void fl.offsetWidth; fl.classList.add('go'); }
+    if (kind === 'rain') for (let i = 0; i < 45; i++) setTimeout(() => rainStar(), i * 45);
+  }
+}
+function updateMagic(dt) {
+  for (let i = magicSparks.length - 1; i >= 0; i--) {
+    const m = magicSparks[i];
+    m.life -= dt * .9; m.v.y -= 2.2 * dt; m.sp.position.addScaledVector(m.v, dt);
+    const s = LOOK.sparkle.magicSize * Math.max(0, m.life); m.sp.scale.set(s, s, 1);
+    if (m.life <= 0) { scene.remove(m.sp); m.sp.material.dispose(); magicSparks.splice(i, 1); }
+  }
+}
+
+/* ============ hover: things you can touch glow and wobble a little ============ */
+let hovered = null, hoverQueued = false;
+const pointer = { x: 0, y: 0 };   // where the reader's hand is, -1..1
+addEventListener('pointermove', e => { pointer.x = e.clientX / innerWidth * 2 - 1; pointer.y = -(e.clientY / innerHeight) * 2 + 1; });
+canvas.addEventListener('pointermove', e => {
+  if (look.dragging || hoverQueued) return;
+  hoverQueued = true;
+  requestAnimationFrame(() => {
+    hoverQueued = false;
+    const objs = pageObjects[target];
+    let hit = null;
+    if (objs && !anim) {
+      ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1);
+      ray.setFromCamera(ndc, camera);
+      const h = ray.intersectObjects(Object.values(objs).map(o => o.mesh))[0];
+      hit = h ? objs[h.object.userData.id] : null;
+    }
+    if (hit !== hovered && hit) sfx(WORLD.sfx.hover);
+    hovered = hit; canvas.style.cursor = hovered ? 'pointer' : '';
+  });
+});
+function hoverAmount(o, dt) { o.hov = (o.hov || 0) + ((hovered === o ? 1 : 0) - (o.hov || 0)) * Math.min(1, dt * 10); return o.hov; }
+// out-and-back envelope: goes out in the first 30%, holds, returns in the last 30%
+const outBack = p => smooth(clamp(p / .3)) * smooth(clamp((1 - p) / .3));
+function animateObject(o, t, dt) {
+  if (o.model) return animateModel(o, dt);
+  const b = o.body, ts = t + o.seed, act0 = o.act;
+  b.position.set(0, 0, 0); b.rotation.set(0, 0, 0); b.scale.set(1, 1, 1);
+  // idle: always on, small
+  if (o.idle === 'sway') b.rotation.z = Math.sin(ts * 1.1) * .035;
+  if (o.idle === 'breathe') { const s = Math.sin(ts * 2.2); b.scale.set(1 - s * .012, 1 + s * .028, 1); }
+  if (o.idle === 'bob') { b.position.y = Math.sin(ts * 1.4) * .12; b.rotation.z = Math.sin(ts * .9) * .06; }
+  if (o.idle === 'swing') b.rotation.z = Math.sin(ts * 1.7) * .1;
+  if (o.idle === 'circle') {
+    b.position.x = Math.sin(ts * .6) * .7; b.position.y = Math.cos(ts * 1.2) * .18;
+    b.scale.x = Math.cos(ts * .6) >= 0 ? 1 : -1;                       // face the way it flies
+    b.scale.y = 1 + Math.sin(ts * 14) * .06;                            // flap
+  }
+  b.position.x += o.offX || 0; b.position.y += o.offY || 0; b.position.z += o.offZ || 0;   // where it hopped to (stays)
+  if (o.dragOff) {                                                                          // being dragged, or springing back
+    const d = o.dragOff;
+    if (!d.held) { d.vx += (-d.x * 60 - d.vx * 7) * dt; d.vz += (-d.z * 60 - d.vz * 7) * dt; d.x += d.vx * dt; d.z += d.vz * dt; if (Math.abs(d.x) + Math.abs(d.z) + Math.abs(d.vx) < .01) o.dragOff = null; }
+    if (o.dragOff) { b.position.x += d.x; b.position.z += d.z; b.rotation.z += Math.sin(t * 3) * .05 * (d.held ? 1 : 0); }
+  }
+  entranceOffset(o, dt, b);
+  if (o.bubble) { const g = o.said ? 1 : 0.001, sc = o.bubble.scale.x; o.bubble.scale.setScalar(sc + (g - sc) * Math.min(1, dt * 6)); o.bubble.material.opacity = Math.min(1, sc); }
+  // action: triggered by a story word or a tap
+  const a = o.act;
+  if (a) {
+    a.t += dt; const p = clamp(a.t / a.dur);
+    if (a.type === 'laugh') { const j = Math.sin(Math.PI * p); b.position.y += j * .25; b.rotation.z += Math.sin(p * Math.PI * 5) * .12; if (p > .2) o.said = true; }
+    if (a.type === 'say') {
+      const L = pageObjects[o.mesh.userData.page]?.lumi;
+      if (a.t <= dt) { a.from = [o.offX || 0, o.offY || 0, o.offZ || 0]; a.to = L ? [(L.x + .22) - o.x, L.h * .62, (L.z + .33) - o.z] : a.from; }
+      const e = smooth(p); o.offX = lerp(a.from[0], a.to[0], e); o.offY = lerp(a.from[1], a.to[1], e); o.offZ = lerp(a.from[2], a.to[2], e);   // two hops, up onto Lumi's lap
+      b.position.set(o.offX, o.offY + Math.abs(Math.sin(p * Math.PI * 2)) * .3 * (1 - p * .6), o.offZ);
+      if (p > .55 && !o.said) { o.said = true; o.saidAt = performance.now(); if (L) { L.slumpGoal = 0; L.lookAt = o; L.mouth?.set('worried'); } }
+    }
+    if (a.type === 'hop') { const j = Math.sin(Math.PI * p); b.position.y += j * Math.max(.35, o.h * .45); b.scale.y *= 1 + (p < .15 ? -.12 : j * .08); }
+    if (a.type === 'wiggle') b.rotation.z += Math.sin(p * Math.PI * 6) * .16 * (1 - p);
+    if (a.type === 'grow') b.scale.multiplyScalar(1 + Math.sin(Math.PI * p) * .22);
+    if (a.type === 'spin') b.rotation.y += easeInOut(p) * Math.PI * 2;
+    if (a.type === 'float') { const e = outBack(p); b.position.y += e * .6; b.rotation.z += Math.sin(p * Math.PI * 3) * .12 * e; }
+    if (a.type === 'fly') {
+      const e = outBack(p), side = o.x > PW / 2 ? -1 : 1;
+      b.position.x += e * 1.8 * side; b.position.y += e * .3 + Math.sin(p * Math.PI * 4) * .15 * e;
+      b.scale.x *= p < .5 ? side : -side;                               // turn around for the way back
+    }
+    if (a.type === 'run') {
+      const e = outBack(p), side = o.x > PW / 2 ? -1 : 1;
+      b.position.x += e * 1.4 * side; b.position.y += Math.abs(Math.sin(p * Math.PI * 9)) * .12 * e;
+      b.scale.x *= p < .5 ? side : -side;
+    }
+    if (a.type === 'glow') {
+      const g = Math.sin(Math.PI * p);
+      o.mesh.material.emissive.setRGB(1, .7, .3); o.mesh.material.emissiveMap = o.mesh.material.map;
+      o.mesh.material.emissiveIntensity = g * 1.2;
+      b.scale.multiplyScalar(1 + g * .08);
+      o.mesh.layers.enable(GLOW_LAYER);
+      if (p >= 1) { o.mesh.material.emissiveIntensity = 0; o.mesh.layers.disable(GLOW_LAYER); }
+    }
+    if (p >= 1) o.act = null;
+  }
+  if (o.mesh.userData.alt) o.mesh.material.map = act0 ? o.mesh.userData.alt : o.mesh.userData.base;
+  if (o.cloud) return updateCloud(o, t, dt, act0);
+  if (o.rainbow) return updateRainbow(o, dt, act0);
+  if (o.butterfly) return updateButterfly(o, t, dt);
+  if (o.label) { const g = o.shown ? 1 : 0.001, sc = o.mesh.scale.x; o.mesh.scale.setScalar(sc + (g - sc) * Math.min(1, dt * 5)); o.mesh.position.y = o.h + .4 + Math.sin(t * 1.5) * .04; return; }
+  const hv = hoverAmount(o, dt);
+  if (hv > .01) { b.scale.multiplyScalar(1 + hv * .07); b.rotation.z += Math.sin(t * 9) * .035 * hv; }
+  if (!(a && a.type === 'glow')) {
+    o.mesh.material.emissive.setRGB(1, .82, .55); o.mesh.material.emissiveMap = o.mesh.material.map;
+    o.mesh.material.emissiveIntensity = hv * .28;
+  }
+}
+
+/* ============ 5. progress: a target page, and f that glides toward it ============ */
+let target = 0, f = 0, anim = null, dir = 1;
+function goTo(i, { auto = false } = {}) {
+  i = clamp(Math.round(i), 0, FLIPS);
+  if (i === target && !anim) return;
+  if (!auto) autoplay = false;               // any manual page change stops autoplay
+  stopReading(); clearFocus(); lightGoal = 1;
+  target = i; dir = Math.sign(i - f) || dir;
+  for (const o of Object.values(pageObjects[i] || {})) { if (o.enter) o.entering = null; if (o.enterOn) o.shown = false; }
+  if (!wordListEl.hidden) hideWordList();
+  anim = { from: f, to: i, t: 0, dur: TURN_SECONDS * Math.max(1, Math.abs(i - f) * 0.75) };
+  look.reset = true;
+  // read once the pop-ups are up (the first page also waits for the world to finish spreading)
+  if (auto) autoWait = performance.now() + (anim.dur + 1.4 + (i === 1 && spread < 1 ? 2.6 : 0)) * 1000;
+  updateButtons();
+}
+const step = d => goTo(target + d);
+const leafProgress = (i, x) => clamp((x - i - 0.05) / 0.9);
+
+const prevBtn = document.getElementById('prev'), nextBtn = document.getElementById('next');
+prevBtn.onclick = () => step(-1); nextBtn.onclick = () => step(1);
+function updateButtons() { prevBtn.disabled = target <= 0; nextBtn.disabled = target >= FLIPS; }
+updateButtons();
+addEventListener('keydown', e => {
+  if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); step(1); }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); step(-1); }
+  if (e.key === ' ') { e.preventDefault(); toggleReading(); }
+});
+let wheelSum = 0, wheelLock = 0;
+addEventListener('wheel', e => {
+  if (e.target.closest && e.target.closest('#card')) return;
+  e.preventDefault();
+  if (performance.now() < wheelLock) return;
+  wheelSum += e.deltaY;
+  if (Math.abs(wheelSum) > 60) { step(Math.sign(wheelSum)); wheelSum = 0; wheelLock = performance.now() + 900; }
+}, { passive: false });
+
+/* ============ 6. camera: overview (whole scene) or focus (one object) ============ */
+const v3 = a => new THREE.Vector3(...a);
+const rig = { pos: new THREE.Vector3(), look: new THREE.Vector3(), cur: v3(STOPS[0].cam), curLook: v3(STOPS[0].look),
+              vel: new THREE.Vector3(), velLook: new THREE.Vector3() };
+const look = { yaw: 0, pitch: 0, dragging: false, x: 0, y: 0, moved: 0, idle: 0, reset: false };
+const framing = { fw: 1, fh: 1 };
+const tmpA = new THREE.Vector3(), tmpB = new THREE.Vector3(), sph = new THREE.Spherical();
+
+// overview: back off until the whole right-page stage fits the free screen area
+const STAGE = { center: new THREE.Vector3(PW / 2, 0.95, -0.2), w: 4.9, h: 4.3, elev: 22 * DEG };
+function overview(k) {
+  if (k === 0) return { pos: v3(STOPS[0].cam), look: v3(STOPS[0].look) };
+  const V = STOPS[k].view || {};                                   // each page frames its stage a little differently
+  const vfov = camera.fov * DEG, hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+  const dw = STAGE.w / 2 / (framing.fw * Math.tan(hfov / 2));
+  const dh = STAGE.h / 2 / (framing.fh * Math.tan(vfov / 2));
+  const d = Math.max(dw, dh) * 1.08 * (V.zoom || 1), elev = (V.elev ?? 22) * DEG, yaw = V.yaw || 0;
+  const look = STAGE.center.clone(); look.y += V.up || 0;
+  const pos = look.clone().add(new THREE.Vector3(Math.sin(yaw) * Math.cos(elev), Math.sin(elev), Math.cos(yaw) * Math.cos(elev)).multiplyScalar(d));
+  return { pos, look };
+}
+
+// focus: like a film cut. The angle comes from where the object is
+// (left side → seen from the left, up in the air → seen from lower down),
+// and a "shot" word can push it further. The camera keeps following the
+// object while it moves, so a flying bat drags the view along with it.
+const SHOTS = {
+  close: { dist: .65 },
+  wide:  { dist: 1.7, elev: 24 },
+  low:   { elev: 6, dist: .9 },
+  high:  { elev: 58, dist: 1.1 },
+  side:  { yawAdd: .75 },
+  count: { dist: .8 },                     // quick close cut for counting things one by one
+};
+let focus = null;   // { obj, offset, until, rate }
+function focusOn(obj, { hold = FOCUS_HOLD, rate = 1.15, shot } = {}) {
+  const c = obj.center(), s = SHOTS[shot] || {};
+  const isChar = obj.model || obj.members?.some(m => m.model);
+  const d = Math.max(isChar ? LOOK.closest.character : LOOK.closest.picture, obj.h * 2.6 * (s.dist || 1));
+  let yaw = clamp((c.x - PW / 2) * .28 + c.z * -.05, -.6, .6);          // turn toward its side of the page
+  if (s.yawAdd) yaw += Math.sign(yaw || 1) * s.yawAdd;
+  const elev = (s.elev ?? (obj.fly ? 12 : obj.h < 1 ? 34 : 24)) * DEG; // look up at flyers, down at small things
+  const offset = new THREE.Vector3(Math.sin(yaw) * Math.cos(elev), Math.sin(elev), Math.cos(yaw) * Math.cos(elev)).multiplyScalar(d);
+  focus = { obj, offset, until: performance.now() + hold * 1000, rate };
+}
+function clearFocus() { focus = null; }
+
+const OPENING_VIEW = { cam: new THREE.Vector3(1.0, 12.5, 15.5), look: new THREE.Vector3(.6, 0, -.5) };
+const spreadGoal0 = () => leafProgress(0, f) > .2 ? 1 : 0;
+function cameraTarget() {
+  const i = Math.min(FLIPS - 1, Math.floor(f)), t = clamp(f - i);
+  const A = overview(i), B = overview(i + 1);
+  rig.pos.lerpVectors(A.pos, B.pos, smooth(t));
+  rig.look.lerpVectors(A.look, B.look, smooth(t));
+  const wide = Math.pow(Math.sin(Math.PI * t), 1.4);
+  rig.pos.lerp(v3(TURN_VIEW.cam), wide * .75);
+  rig.look.lerp(v3(TURN_VIEW.look), wide * .6);
+  // while the world spreads out, pull far back so you can watch it happen
+  const opening = spreadGoal0() * Math.sin(Math.PI * clamp(spread));
+  rig.pos.lerp(OPENING_VIEW.cam, opening * .85); rig.look.lerp(OPENING_VIEW.look, opening * .7);
+  if (focus && !anim) {
+    if (performance.now() < focus.until || focus.obj.act) {           // stay while it's still acting
+      rig.look.copy(focus.obj.center()); rig.pos.copy(rig.look).add(focus.offset);
+    } else focus = null;
+  }
+  // drag offset: orbit around the look point
+  sph.setFromVector3(tmpA.copy(rig.pos).sub(rig.look));
+  sph.theta += look.yaw;
+  sph.phi = clamp(sph.phi - look.pitch, 0.2, 1.45);
+  rig.pos.copy(rig.look).add(tmpB.setFromSpherical(sph));
+}
+
+// drag to look around; a click without dragging taps an object
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+const dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), dragHit = new THREE.Vector3();
+let dragObj = null;
+function pickDraggable(x, y) {
+  const objs = pageObjects[target]; if (!objs || anim) return null;
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(Object.values(objs).filter(o => o.drag).map(o => o.mesh))[0];
+  if (!hit) return null;
+  const o = objs[hit.object.userData.id], c = o.center();
+  dragPlane.constant = -c.y; ray.ray.intersectPlane(dragPlane, dragHit);
+  return { o, x0: dragHit.x, z0: dragHit.z, leaf: o.body.parent.parent };
+}
+canvas.addEventListener('pointerdown', e => {
+  dragObj = pickDraggable(e.clientX, e.clientY);
+  if (dragObj) { dragObj.o.dragOff = dragObj.o.dragOff || { x: 0, z: 0, vx: 0, vz: 0, held: true }; dragObj.o.dragOff.held = true; canvas.setPointerCapture(e.pointerId); sfx('tick'); return; }
+  look.dragging = true; look.x = e.clientX; look.y = e.clientY; look.moved = 0;
+  look.x0 = e.clientX; look.t0 = performance.now(); look.yaw0 = look.yaw;
+  canvas.setPointerCapture(e.pointerId); canvas.classList.add('dragging');
+});
+canvas.addEventListener('pointermove', e => {
+  if (dragObj) {
+    ndc.set(e.clientX / innerWidth * 2 - 1, -(e.clientY / innerHeight) * 2 + 1); ray.setFromCamera(ndc, camera);
+    if (ray.ray.intersectPlane(dragPlane, dragHit)) {
+      const d = dragObj.o.dragOff, lx = dragHit.x - dragObj.x0, lz = dragHit.z - dragObj.z0;   // world and page axes line up for the open page
+      d.x = clamp(lx, -3, 1.2); d.z = clamp(lz * .45, -1, 1.6);
+      if (Math.abs(d.x) + Math.abs(d.z) > .3 && STOPS[target].gesture?.type === 'drag') { gestureDone[target] = true; updateHint(); }
+    }
+    return;
+  }
+  if (!look.dragging) return;
+  const dx = e.clientX - look.x, dy = e.clientY - look.y; look.x = e.clientX; look.y = e.clientY;
+  look.moved += Math.abs(dx) + Math.abs(dy);
+  look.yaw = clamp(look.yaw - dx * 0.006, -1.1, 1.1);
+  look.pitch = clamp(look.pitch + dy * 0.005, -0.6, 0.8);
+});
+const endDrag = e => {
+  if (dragObj) { dragObj.o.dragOff.held = false; sfx('boing'); dragObj = null; return; }
+  if (!look.dragging) return;
+  look.dragging = false; look.idle = 0; canvas.classList.remove('dragging');
+  const g = STOPS[target]?.gesture, dx = e.clientX - look.x0;
+  if (look.moved < 6) tapAt(e.clientX, e.clientY);
+  else if (g && g.type === 'swipe' && !anim && Math.abs(dx) > 160 && performance.now() - look.t0 < 550) { look.yaw = look.yaw0; runGesture(g, Math.sign(dx)); }
+  else if (e.pointerType === 'touch' && look.moved > 80 && Math.abs(look.yaw) > .25) step(look.yaw > 0 ? 1 : -1);
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+function tapAt(x, y) {
+  const objs = pageObjects[target]; if (!objs || anim) return;
+  ndc.set(x / innerWidth * 2 - 1, -(y / innerHeight) * 2 + 1);
+  ray.setFromCamera(ndc, camera);
+  const hit = ray.intersectObjects(Object.values(objs).map(o => o.mesh))[0];
+  if (!hit) return;
+  const id = hit.object.userData.id;
+  if (STOPS[target].gesture?.type === 'tap') { gestureDone[target] = true; updateHint(); }
+  focusOn(objs[id], { hold: 2.4, rate: 2.2 });
+  doAction(objs[id], objs[id].tap);
+  flashWord(id); tagFor(id, objs[id]);
+}
+
+/* ============ 7. left panel: progress line + story card with a reading line ============ */
+const fill = document.getElementById('fill'), track = document.getElementById('track');
+const card = document.getElementById('card'), pval = document.getElementById('pval'), hint = document.getElementById('hint');
+const textEl = document.getElementById('c-text'), readBtn = document.getElementById('read');
+const dots = STOPS.map((s, i) => {
+  const d = document.createElement('div'); d.className = 'dot'; d.style.top = (i / FLIPS * 100) + '%';
+  d.onclick = () => goTo(i); track.appendChild(d); return d;
+});
+
+// "[tree:tree/wiggle/low]" → a linked word span (object id, action, shot); everything else → plain word spans
+function renderWords(text) {
+  textEl.innerHTML = '';
+  const words = [];
+  for (const tok of text.match(/\[[^\]]+\][^\s]*|\S+/g)) {
+    const m = tok.match(/^\[([^:\]]+):([^\]]+)\](.*)$/);
+    const span = document.createElement('span'); span.className = 'w';
+    if (m) {
+      const [id, act = '', shot = ''] = m[2].split('/');
+      span.textContent = m[1] + m[3]; Object.assign(span.dataset, { link: id, act, shot }); span.classList.add('link');
+    } else span.textContent = tok;
+    span.onclick = () => {
+      const obj = resolveTarget(span.dataset.link);
+      if (obj && !anim) {
+        focusOn(obj, { hold: 2.4, rate: 2.2, shot: span.dataset.shot });
+        doAction(obj, span.dataset.act || obj.tap); flashWord(span.dataset.link);
+        if (namesIt(span.textContent, span.dataset.link)) showTag(obj, span.textContent, .4);
+      }
+    };
+    textEl.append(span, ' ');
+    words.push(span);
+  }
+  return words;
+}
+let words = [], shownStop = -1;
+// card look: a body class switches the CSS; the torn note gets a new ragged edge on every page
+const CARD_STYLES = ['rain', 'torn', 'sticker', 'riso'];
+let cardStyle = WORLD.card;
+const cardBtn = document.getElementById('cardstyle');
+function applyCardStyle() {
+  document.body.classList.remove(...CARD_STYLES.map(c => 'card-' + c));
+  document.body.classList.add('card-' + cardStyle); cardBtn.textContent = '🃏 ' + cardStyle;
+}
+cardBtn.onclick = () => { cardStyle = CARD_STYLES[(CARD_STYLES.indexOf(cardStyle) + 1) % CARD_STYLES.length]; applyCardStyle(); };
+function tearEdge() {
+  const j = a => (Math.random() * a).toFixed(2), pts = [];
+  for (let x = 0; x <= 100; x += 2.5) pts.push(`${x}% ${j(1.3)}%`);
+  for (let y = 0; y <= 100; y += 2.5) pts.push(`${100 - j(.9)}% ${y}%`);
+  for (let x = 100; x >= 0; x -= 2.5) pts.push(`${x}% ${100 - j(1.3)}%`);
+  for (let y = 100; y >= 0; y -= 2.5) pts.push(`${j(.9)}% ${y}%`);
+  card.style.setProperty('--torn', `polygon(${pts.join(',')})`);
+}
+applyCardStyle(); tearEdge();
+
+function showCard(i) {
+  if (i === shownStop) return; shownStop = i;
+  card.classList.add('hide');
+  setTimeout(() => {
+    document.getElementById('c-num').textContent = i === 0 ? 'COVER' : `PAGE ${i} OF ${FLIPS}`;
+    document.getElementById('c-title').textContent = STOPS[i].title;
+    words = renderWords(STOPS[i].text);
+    updateReadBtn(); tearEdge();
+    card.classList.remove('hide');
+  }, 300);
+}
+function flashWord(id) {
+  words.forEach(w => { if (w.dataset.link === id) { w.classList.add('on'); setTimeout(() => !reading && w.classList.remove('on'), 900); } });
+}
+
+// reading: highlight word by word on a timer (a real voice can drive the same onWord later)
+// autoplay (like storycomet's "Read to me"): read the page → turn → read the next … until the end
+let reading = null;   // { i, t }
+let lastFocusAt = 0, pendingFocus = null;
+let autoplay = false, autoWait = 0;
+const pageDone = {};
+function updateReadBtn() {
+  readBtn.hidden = false;
+  readBtn.textContent = reading ? (reading.paused ? '▶ Keep reading' : '❚❚ Pause')
+    : autoplay ? '❚❚ Pause'
+    : target === 0 ? '▶ Play the story' : pageDone[target] ? '↻ Read again' : '▶ Read to me';
+}
+function toggleReading() {
+  if (reading) {                                                                      // pause ↔ keep reading (the voice stops and resumes with it)
+    reading.paused = !reading.paused;
+    if (reading.voice) { if (reading.paused) reading.voice.pause(); else reading.voice.play().catch(() => {}); }
+    updateReadBtn(); return;
+  }
+  if (autoplay) { autoplay = false; autoWait = 0; updateReadBtn(); return; }        // waiting for the next page: stop
+  autoplay = true;
+  if (target === 0) goTo(1, { auto: true }); else startReading();
+  updateReadBtn();
+}
+// narration: one audio file per page (p1.wav ... p11.wav, her own voice) + meta.json made by voice/_tools/make_voice.py:
+// { "<page>": { dur, words: [[start, end], ...] } }. With the per-word times the highlight (and the camera that follows it)
+// is driven by the audio clock; without them the synthetic pacing is stretched to the audio length; without audio it just runs.
+const VOICE = { dir: 'assets/lumi-book/voice/', meta: {}, el: null };
+if (Q.get("debug")) window.__voice = VOICE;   // ?debug=1: for test scripts
+fetch(VOICE.dir + 'meta.json').then(r => r.json()).then(m => VOICE.meta = m).catch(() => {});
+function nominalSeconds(i) {
+  const w = words[i].textContent, wd = words[i].dataset;
+  return WORD_SECONDS + (/[.!?]$/.test(w) ? .45 : /[,;]$/.test(w) ? .2 : 0) + (wd.shot === 'count' ? .55 : 0) + (TAG.on && wd.link && namesIt(w, wd.link) ? TAG.pause : 0);
+}
+// meta.json has one [start, end] per word of the script; a linked phrase on the page ("lives on") is one span but two script words
+function timedWords(T) {
+  if (!T) return null;
+  const out = []; let k = 0;
+  for (const w of words) {
+    const n = w.textContent.trim().split(/\s+/).length;
+    if (k + n > T.length) return null;
+    out.push([T[k][0], T[k + n - 1][1]]); k += n;
+  }
+  return k === T.length ? out : null;                                       // text and recording out of step: use the synthetic pacing
+}
+function startReading() {
+  if (anim || !STOPS[target].objects || !words.length) return;
+  reading = { i: -1, t: 0, scale: 1 }; updateReadBtn();
+  const m = VOICE.meta[target];
+  if (m) {
+    if (muted) { muted = false; ctx = ctx || new AudioContext(); ctx.resume(); document.getElementById('snd').textContent = '🔊 sound'; }   // "read to me" means: with sound
+    VOICE.el?.pause();
+    const el = VOICE.el = reading.voice = new Audio(VOICE.dir + 'p' + target + '.wav'), r = reading;
+    const timed = timedWords(m.words);                                      // exact: follow her voice word by word
+    if (timed) r.timed = timed;
+    else {                                                                 // no word times for this page: stretch the pacing to the audio length
+      let total = 0; for (let i = 0; i < words.length; i++) total += nominalSeconds(i);
+      r.scale = (m.dur + .3) / total; r.t = .25;                           // a short breath before the first word
+    }
+    const noAudio = () => { if (reading === r && r.timed) { r.timed = null; r.scale = 1; r.t = .25; } };   // file missing / blocked: fall back to the synthetic pacing
+    el.addEventListener('error', noAudio); el.play().catch(noAudio);
+  }
+}
+function stopReading() {
+  reading = null; pendingFocus = null; VOICE.el?.pause();
+  words.forEach(w => w.classList.remove('on', 'past'));
+  updateReadBtn();
+}
+readBtn.onclick = toggleReading;
+
+// stars: one per page, filled when that page has been read to the end
+const starsEl = document.getElementById('stars');
+for (let k = 1; k <= FLIPS; k++) { const st = document.createElement('span'); st.textContent = '★'; starsEl.appendChild(st); }
+function earnStar(k) {
+  const st = starsEl.children[k - 1]; if (!st || st.classList.contains('got')) return;
+  st.classList.add('got'); sfx(WORLD.sfx.star);
+}
+
+// page gestures + hint: e.g. swipe across page 1 to make a gust
+const hintEl = document.getElementById('pagehint'), gestureDone = {};
+let hintKey = '';
+function updateHint() {                     // only touches the page when something changed
+  const g = STOPS[target]?.gesture, show = !!g && !gestureDone[target] && !anim, key = target + '|' + show;
+  if (key === hintKey) return; hintKey = key;
+  if (g) hintEl.textContent = '👆 ' + g.hint;
+  hintEl.classList.toggle('show', show);
+}
+function runGesture(g, dirX) {
+  gestureDone[target] = true; updateHint();
+  if (g.does === 'gust') {
+    gust(dirX); sfx(WORLD.sfx.gust);
+    Object.values(pageObjects[target] || {}).forEach((o, i) => { o.pushDir = dirX; setTimeout(() => doAction(o, o.model ? 'pushed' : o.fly ? 'fly' : 'wiggle'), i * 80); });
+  }
+}
+/* vocabulary tags: a word that names its picture ("tree" → tree, "bats" → bat*) shows a tag over it, automatically */
+const tagsEl = document.getElementById('tags'), liveTags = [];
+const TAG = { on: false, delay: .8, stay: 4, pause: 1.2 };   // on: false = no word tags (switch back on any time)   // seconds: wait for the camera, how long a tag stays, extra reading pause on the word
+const cleanWord = t => t.toLowerCase().replace(/[^a-z']/g, '');
+function namesIt(text, link) {
+  const w = cleanWord(text), base = link.replace(/[\d*]+$/, '').toLowerCase();
+  return w === base || w === base + 's' || w === base + 'es' || w + 's' === base;
+}
+function showTag(obj, text, delay = TAG.delay) {
+  if (!TAG.on) return;
+  clearTimeout(showTag.timer);
+  showTag.timer = setTimeout(() => {                 // appear once the camera has arrived
+    for (const t of liveTags) t.until = Math.min(t.until, performance.now());   // one tag at a time: the old one fades
+    const el = document.createElement('div'); el.className = 'vtag'; tagsEl.appendChild(el);
+    el.textContent = text.replace(/[^A-Za-z' -]/g, '');
+    liveTags.push({ el, obj, until: performance.now() + TAG.stay * 1000 });
+  }, delay * 1000);
+}
+function updateTags() {
+  const now = performance.now();
+  for (let i = liveTags.length - 1; i >= 0; i--) {
+    const t = liveTags[i], p = t.obj.center();
+    p.y += (t.obj.h || 1) * .6;
+    p.project(camera);
+    // keep the tag on screen (tall things like trees would push it off the top)
+    t.el.style.left = clamp((p.x + 1) / 2 * innerWidth, 90, innerWidth - 90) + 'px';
+    t.el.style.top = clamp((1 - p.y) / 2 * innerHeight, 120, innerHeight - 40) + 'px';
+    if (now > t.until) t.el.classList.add('out');
+    if (now > t.until + 850 || anim) { t.el.remove(); liveTags.splice(i, 1); }
+  }
+}
+// a tapped picture shows the word the story uses for it (if there is one)
+function tagFor(id, obj) {
+  const w = words.find(w => w.dataset.link === id && namesIt(w.textContent, id));
+  if (w) showTag(obj, w.textContent, .4);
+}
+
+function onWord(i) {
+  words.forEach((w, j) => { w.classList.toggle('on', j === i); w.classList.toggle('past', j === i - 1); });
+  const { link, act, shot } = words[i].dataset, obj = resolveTarget(link);
+  if (!obj) return;
+  if (namesIt(words[i].textContent, link)) showTag(obj, words[i].textContent);
+  if (act) doAction(obj, act);                                       // verbs act every time
+  const now = performance.now(), gap = shot === 'count' ? 900 : WORLD.cutGap * 1000;
+  // camera cuts at most every cutGap seconds (counting cuts faster) — unless it's already looking at this target
+  if (focus?.obj === obj || (focus?.obj?.members && obj.members && focus.obj.members[0] === obj.members[0])) { if (shot) focusOn(obj, { shot }); }
+  else if (now - lastFocusAt > gap) { lastFocusAt = now; focusOn(obj, { shot }); pendingFocus = null; }
+  else pendingFocus = { obj, shot };                                 // too soon: visit it next
+}
+function finishReading() {                   // finished: back to the whole picture
+  pageDone[target] = true; earnStar(target);
+  stopReading();
+  setTimeout(() => { if (!reading) clearFocus(); }, 1200);
+  if (autoplay && target < FLIPS) setTimeout(() => { if (autoplay) goTo(target + 1, { auto: true }); }, 2600);
+  else { autoplay = false; updateReadBtn(); }
+}
+function updateReading(dt) {
+  if (pendingFocus && performance.now() - lastFocusAt > 1400) {
+    lastFocusAt = performance.now(); focusOn(pendingFocus.obj, { shot: pendingFocus.shot }); pendingFocus = null;
+  }
+  if (!reading || reading.paused) return;
+  if (reading.timed) {                       // her voice is the clock: a word lights up when she starts saying it
+    const el = reading.voice, T = reading.timed, c = el.currentTime;
+    while (reading.i + 1 < words.length && c >= T[reading.i + 1][0] - .03) onWord(++reading.i);
+    if (reading.i >= words.length - 1 && (el.ended || c >= T[T.length - 1][1] + .15)) finishReading();
+    return;
+  }
+  reading.t -= dt;
+  if (reading.t > 0) return;
+  reading.i++;
+  if (reading.i >= words.length) { finishReading(); return; }
+  onWord(reading.i);
+  const w = words[reading.i].textContent;
+  const wd = words[reading.i].dataset;
+  reading.t = nominalSeconds(reading.i) * (reading.scale || 1);     // paced to the narration when there is one
+}
+
+/* ============ cursor trail: a little magic follows the mouse / finger ============
+   Three styles to try (✨ button): fireflies drift up and glow, confetti tumbles down,
+   stars pop and twinkle. A click or tap makes a small burst. */
+const fx = document.getElementById('fx'), fxc = fx.getContext('2d');
+const TRAILS = ['fireflies', 'confetti', 'stars'];
+const CONFETTI = ['#e8742a', '#f2a93b', '#9b6bd6', '#fbf3e2', '#d94c2a'];
+let trail = WORLD.trail, parts = [], lastP = null;
+const trailBtn = document.getElementById('trail');
+trailBtn.onclick = () => { trail = TRAILS[(TRAILS.indexOf(trail) + 1) % TRAILS.length]; trailBtn.textContent = '✨ ' + trail; };
+function sizeFx() { const r = Math.min(devicePixelRatio, 2); fx.width = innerWidth * r; fx.height = innerHeight * r; fxc.setTransform(r, 0, 0, r, 0, 0); }
+addEventListener('resize', sizeFx); sizeFx();
+function spawn(x, y, burst = false) {
+  const n = burst ? 7 : 1;
+  if (!burst && parts.filter(p => p.kind !== 'rain').length > 18) return;                            // never more than a handful on screen
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, sp = burst ? 60 + Math.random() * 120 : 10 + Math.random() * 20;
+    const p = { x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: 1, rot: Math.random() * 6, vr: (Math.random() - .5) * 8, seed: Math.random() * 6 };
+    if (trail === 'fireflies') Object.assign(p, { life: 1.8 + Math.random(), r: 3.2 + Math.random() * 3, vy: p.vy - 25 });
+    if (trail === 'confetti') Object.assign(p, { life: 1.4, w: 5 + Math.random() * 4, h: 3 + Math.random() * 3, color: CONFETTI[Math.random() * CONFETTI.length | 0] });
+    if (trail === 'stars') Object.assign(p, { life: .9 + Math.random() * .4, r: 4 + Math.random() * 5, vx: p.vx * .4, vy: p.vy * .4 });
+    p.kind = trail; parts.push(p);
+  }
+}
+addEventListener('pointermove', e => {
+  if (lastP && Math.hypot(e.clientX - lastP.x, e.clientY - lastP.y) < 34) return;   // one particle every ~34 px: calm, not busy
+  lastP = { x: e.clientX, y: e.clientY }; spawn(e.clientX, e.clientY);
+});
+addEventListener('pointerdown', e => spawn(e.clientX, e.clientY, true));
+function star(g, r) {                                                 // a 4-point twinkle
+  g.beginPath();
+  for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, rr = i % 2 ? r * .32 : r; g.lineTo(Math.cos(a) * rr, Math.sin(a) * rr); }
+  g.closePath(); g.fill();
+}
+function rainStar() {
+  parts.push({ kind: 'rain', x: Math.random() * innerWidth, y: -10, vx: (Math.random() - .5) * 30, vy: 120 + Math.random() * 120, t: 0, life: 3.2, rot: Math.random() * 6, vr: (Math.random() - .5) * 3, r: 5 + Math.random() * 6, seed: Math.random() * 6 });
+}
+function updateTrail(dt) {
+  fxc.clearRect(0, 0, innerWidth, innerHeight);
+  parts = parts.filter(p => (p.t += dt) < p.life);
+  for (const p of parts) {
+    const k = p.t / p.life, g = fxc;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.vr * dt;
+    g.save(); g.translate(p.x, p.y);
+    if (p.kind === 'fireflies') {
+      p.vx *= .97; p.vy = p.vy * .97 - 8 * dt; p.x += Math.sin(p.t * 3 + p.seed) * .4;
+      const a = Math.min(1, Math.sin(Math.PI * k) * 1.4) * (.7 + .3 * Math.sin(p.t * 12 + p.seed));
+      g.globalAlpha = a; g.shadowColor = '#ffc04d'; g.shadowBlur = 22; g.fillStyle = '#fff3c4';
+      g.beginPath(); g.arc(0, 0, p.r, 0, Math.PI * 2); g.fill();
+    }
+    if (p.kind === 'confetti') {
+      p.vy += 260 * dt; p.vx *= .98;
+      g.globalAlpha = 1 - k * k; g.rotate(p.rot); g.scale(1, Math.cos(p.t * 9 + p.seed));
+      g.fillStyle = p.color; g.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+    }
+    if (p.kind === 'rain') {
+      g.globalAlpha = Math.min(1, (1 - p.t / p.life) * 2); g.rotate(p.rot * .3);
+      g.shadowColor = '#ffd27a'; g.shadowBlur = 10; g.fillStyle = '#fff3c8'; star(g, p.r);
+    }
+    if (p.kind === 'stars') {
+      p.vx *= .95; p.vy *= .95;
+      const s = Math.sin(Math.PI * Math.min(1, k * 1.4)) * (1 + .3 * Math.sin(p.t * 20));
+      g.globalAlpha = 1 - k; g.rotate(p.rot * .2); g.scale(s, s);
+      g.shadowColor = '#ffd27a'; g.shadowBlur = 8; g.fillStyle = '#fff6d6'; star(g, p.r);
+    }
+    g.restore();
+  }
+}
+
+/* ============ sound: paper flip (from the Halloween card) ============ */
+let ctx = null, muted = true;
+document.getElementById('snd').onclick = e => {
+  muted = !muted; ctx = ctx || new AudioContext(); ctx.resume();
+  e.target.textContent = muted ? '🔇 sound' : '🔊 sound';
+};
+/* small sounds made in code (no audio files). A story's WORLD.sfx says which one plays for which action. */
+function tone({ f0, f1 = f0, dur = .25, type = 'sine', vol = .15, delay = 0, vib = 0 }) {
+  const t = ctx.currentTime + delay, o = ctx.createOscillator(), g = ctx.createGain();
+  o.type = type; o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(Math.max(20, f1), t + dur);
+  if (vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 18; lg.gain.value = vib; l.connect(lg).connect(o.frequency); l.start(t); l.stop(t + dur); }
+  g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vol, t + .01); g.gain.exponentialRampToValueAtTime(.0005, t + dur);
+  o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + dur + .02);
+}
+function bell(f, delay = 0, vol = .08, dur = 1.2) { tone({ f0: f, dur, vol, delay }); tone({ f0: f * 2.76, dur: dur * .4, vol: vol * .3, delay }); }
+function hiss({ dur = .4, f0 = 600, f1 = 2400, q = .9, vol = .12, delay = 0 }) {
+  const t = ctx.currentTime + delay, n = Math.floor(ctx.sampleRate * dur), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+  for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.sin(Math.PI * i / n);
+  const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = b; bp.type = 'bandpass'; bp.Q.value = q; bp.frequency.setValueAtTime(f0, t); bp.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  g.gain.value = vol; src.connect(bp).connect(g).connect(ctx.destination); src.start(t);
+}
+const SOUNDS = {
+  boing:   () => tone({ f0: 170, f1: 430, dur: .28, vol: .16, vib: 25 }),
+  whoosh:  () => hiss({ dur: .6, f0: 380, f1: 2600, vol: .16 }),
+  patter:  () => { for (let i = 0; i < 6; i++) hiss({ dur: .05, f0: 1800, f1: 1600, q: 3, vol: .1, delay: i * .09 }); },
+  chime:   () => { bell(1046.5); bell(1568, .08, .06); },
+  twirl:   () => [784, 988, 1175, 1568].forEach((f, i) => bell(f, i * .06, .05, .5)),
+  pop:     () => { tone({ f0: 720, f1: 180, dur: .09, vol: .18 }); hiss({ dur: .03, f0: 3000, f1: 3000, q: 1, vol: .06 }); },
+  twinkle: () => [1760, 2093, 2637].forEach((f, i) => bell(f, i * .12, .035, .6)),
+  giggle:  () => [700, 900, 720, 940, 760].forEach((f, i) => tone({ f0: f, f1: f * 1.1, dur: .07, vol: .07, delay: i * .08, vib: 30 })),
+  sparkle: () => { for (let i = 0; i < 9; i++) bell(1800 + Math.random() * 1600, i * .055, .03, .5); },
+  star:    () => { bell(1318.5, 0, .06); bell(1760, .1, .06); },
+  tick:    () => tone({ f0: 1400, f1: 1200, dur: .04, vol: .03 }),
+  croak:   () => { tone({ f0: 150, f1: 120, dur: .16, type: 'sawtooth', vol: .07, vib: 40 }); tone({ f0: 170, f1: 130, dur: .2, type: 'sawtooth', vol: .07, delay: .2, vib: 40 }); },
+  chirp:   () => [0, .09, .2].forEach(d => tone({ f0: 2200, f1: 3400, dur: .07, vol: .06, delay: d })),
+  rainbow: () => [523, 659, 784, 1046, 1318, 1568, 2093].forEach((f, i) => bell(f, i * .11, .05, 1.8)),
+  sigh:    () => hiss({ dur: .7, f0: 900, f1: 300, q: 1.5, vol: .06 }),
+  umbrella:() => { hiss({ dur: .25, f0: 500, f1: 2400, q: 1.2, vol: .12 }); tone({ f0: 300, f1: 520, dur: .12, vol: .1, delay: .18 }); },
+};
+// rain you can hear: a soft bed of filtered noise that follows the grey of the page (plus a few drips)
+let rainBed = null;
+function updateRainSound(level) {
+  if (!ctx) return;
+  if (!rainBed) {
+    const n = ctx.sampleRate * 2, b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = b; src.loop = true;
+    const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = .6;
+    const g = ctx.createGain(); g.gain.value = 0; src.connect(bp).connect(g).connect(ctx.destination); src.start();
+    rainBed = { g, nextDrip: 0 };
+  }
+  rainBed.g.gain.setTargetAtTime(muted ? 0 : level * .045, ctx.currentTime, .4);
+  if (!muted && level > .3 && ctx.currentTime > rainBed.nextDrip) {   // an occasional drip
+    tone({ f0: 1500 + Math.random() * 900, f1: 900, dur: .06, vol: .025 * level }); rainBed.nextDrip = ctx.currentTime + .4 + Math.random() * 1.6;
+  }
+}
+function sfx(name) { if (!muted && ctx && SOUNDS[name]) SOUNDS[name](); }
+// background music: two looping tracks (rainy = slow music box / piano, sunny = ukulele / glockenspiel).
+// Rainy plays from the cover through the grey pages. On the rainbow page (sunnyFrom) it softens to `clearing` while the sky clears;
+// when the rainbow comes out (read or tapped) rainy fades away, the rainbow chime fills a short breath, and the sunny tune starts
+// from its first note and swells in as the arc finishes painting. Sunny stays for the rest of the book; turning back reverses it.
+// Under her narration the music ducks to WORLD.music.duck. Silent while the 🔇 button is off; no files = no music, no errors.
+const MUSIC = { master: null, rainy: null, sunny: null, on: 'rainy', since: -10, at: 0 };
+if (Q.get("debug")) window.__music = MUSIC;   // ?debug=1: for test scripts
+function updateMusic() {
+  const M = WORLD.music; if (!M || !ctx) return;
+  if (!MUSIC.master) {
+    if (muted) return;
+    MUSIC.master = ctx.createGain(); MUSIC.master.gain.value = 0; MUSIC.master.connect(ctx.destination);
+    for (const k of ['rainy', 'sunny']) {
+      const el = new Audio(M[k]), g = ctx.createGain(); el.loop = true; g.gain.value = 0;
+      ctx.createMediaElementSource(el).connect(g).connect(MUSIC.master); MUSIC[k] = { el, g, lv: 0 };
+    }
+  }
+  const t = ctx.currentTime, dt = Math.min(.1, t - (MUSIC.at || t)); MUSIC.at = t;
+  const want = target > M.sunnyFrom || (target === M.sunnyFrom && SKY_RAINBOW.show) ? 'sunny' : 'rainy';
+  if (want !== MUSIC.on) {
+    MUSIC.on = want; MUSIC.since = t; MUSIC.fresh = want === 'sunny' && MUSIC.sunny.lv < .05;
+  }
+  const breath = t - MUSIC.since > 1;
+  if (breath && MUSIC.fresh) { MUSIC.fresh = false; MUSIC.sunny.el.currentTime = 0; MUSIC.sunny.lv = .35; }   // the sunny tune starts from its first note, already audible
+  const inn = MUSIC[want], out = MUSIC[want === 'sunny' ? 'rainy' : 'sunny'];
+  out.lv *= Math.exp(-dt / .9);                                                                    // fades away over ~2.5 s
+  const cap = want === 'rainy' && target >= M.sunnyFrom ? M.clearing : 1;
+  if (breath) inn.lv = inn.lv < cap ? Math.min(cap, inn.lv + dt / 2.2) : inn.lv + (cap - inn.lv) * Math.min(1, dt / 1.5);   // after a 1 s breath, swells in over ~2 s
+  const talking = VOICE.el && !VOICE.el.paused && !VOICE.el.ended;
+  if (VOICE.el) VOICE.el.muted = muted;
+  MUSIC.master.gain.setTargetAtTime(muted ? 0 : M.vol * (talking ? M.duck : 1), t, talking ? .25 : .8);
+  for (const k of ['rainy', 'sunny']) {
+    const T = MUSIC[k], el = T.el, live = (k === want && (breath || T.lv > .003)) || T.lv > .003;
+    T.g.gain.setTargetAtTime(T.lv * T.lv * (3 - 2 * T.lv), t, .05);
+    if ((muted || !live) && !el.paused) el.pause();                                                 // a silent track waits where it is
+    else if (!muted && live && el.paused) el.play().catch(() => {});
+  }
+}
+function flipSound(up = true, dur = .6, vol = .22) {
+  if (muted || !ctx) return;
+  const t = ctx.currentTime, n = Math.floor(ctx.sampleRate * dur), b = ctx.createBuffer(1, n, ctx.sampleRate), d = b.getChannelData(0);
+  let flutter = 0;
+  for (let i = 0; i < n; i++) {
+    const x = i / n, env = Math.pow(Math.sin(Math.PI * Math.pow(x, .7)), 1.6);
+    if (i % 220 === 0) flutter = .55 + Math.random() * .45;
+    d[i] = (Math.random() * 2 - 1) * env * flutter;
+  }
+  const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(), hp = ctx.createBiquadFilter(), g = ctx.createGain();
+  src.buffer = b; bp.type = 'bandpass'; bp.Q.value = .5; hp.type = 'highpass'; hp.frequency.value = 400;
+  bp.frequency.setValueAtTime(up ? 900 : 3200, t); bp.frequency.exponentialRampToValueAtTime(up ? 3200 : 900, t + dur);
+  g.gain.value = vol; src.connect(bp).connect(hp).connect(g).connect(ctx.destination); src.start(t);
+}
+
+/* ============ layout: keep the book in the free space beside the panel ============ */
+function resize() {
+  const w = innerWidth, h = innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h; camera.fov = w < h ? 52 : 36;
+  const panel = document.getElementById('panel').getBoundingClientRect();
+  const wide = w > 760;
+  const shift = wide ? panel.right / 2 : 0;
+  const lift = wide ? 0 : (h - panel.top) / 2;
+  framing.fw = wide ? (w - panel.right) / w : 1;
+  framing.fh = wide ? 1 : panel.top / h;
+  camera.setViewOffset(w, h, -shift, lift, w, h);
+  camera.updateProjectionMatrix();
+}
+/* ============ glow: a second render of only the glowing things, blurred and added on top ============ */
+const glowLayer = new THREE.Layers(); glowLayer.set(GLOW_LAYER);
+const glowComposer = new EffectComposer(renderer); glowComposer.renderToScreen = false;
+glowComposer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), LOOK.glow.strength, LOOK.glow.radius, LOOK.glow.threshold);
+glowComposer.addPass(bloomPass);
+const finalComposer = new EffectComposer(renderer);
+finalComposer.addPass(new RenderPass(scene, camera));
+finalComposer.addPass(new ShaderPass(new THREE.ShaderMaterial({
+  uniforms: { baseTexture: { value: null }, glowTexture: { value: glowComposer.renderTarget2.texture } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: 'uniform sampler2D baseTexture, glowTexture; varying vec2 vUv; void main() { gl_FragColor = texture2D(baseTexture, vUv) + texture2D(glowTexture, vUv); }',
+}), 'baseTexture'));
+finalComposer.addPass(new OutputPass());
+const paperTex = canvasTexture(512, 512, c => {   // paper fibres: speckles and short faint strokes
+  c.fillStyle = '#fff'; c.fillRect(0, 0, 512, 512);
+  for (let i = 0; i < 26000; i++) { const v = 150 + Math.random() * 105; c.fillStyle = `rgba(${v},${v - 4},${v - 10},${.08 + Math.random() * .22})`; c.fillRect(Math.random() * 512, Math.random() * 512, 1 + Math.random() * 1.5, 1); }
+  c.strokeStyle = 'rgba(120,110,100,.06)'; c.lineWidth = 1;
+  for (let i = 0; i < 900; i++) { const x = Math.random() * 512, y = Math.random() * 512, a = Math.random() * Math.PI; c.beginPath(); c.moveTo(x, y); c.lineTo(x + Math.cos(a) * 9, y + Math.sin(a) * 9); c.stroke(); }
+});
+paperTex.colorSpace = THREE.NoColorSpace; paperTex.wrapS = paperTex.wrapT = THREE.RepeatWrapping;
+const paperPass = new ShaderPass(new THREE.ShaderMaterial({
+  uniforms: { tDiffuse: { value: null }, paper: { value: paperTex }, aspect: { value: 1 }, strength: { value: LOOK.paint.paper }, vig: { value: LOOK.paint.vignette }, cool: { value: 0 } },
+  vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+  fragmentShader: `uniform sampler2D tDiffuse, paper; uniform float aspect, strength, vig, cool; varying vec2 vUv;
+    void main() {
+      vec3 col = texture2D(tDiffuse, vUv).rgb;
+      vec3 p = texture2D(paper, vUv * vec2(aspect, 1.0) * 2.6).rgb;
+      col *= mix(vec3(1.0), p, strength);
+      float l = dot(col, vec3(.3, .59, .11)); col = mix(col, vec3(l), cool * .16);
+      float d = length((vUv - .5) * vec2(aspect, 1.0)); col *= 1.0 - smoothstep(.5, 1.15, d) * vig;
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+}));
+finalComposer.addPass(paperPass);
+const blackMat = new THREE.MeshBasicMaterial({ color: 0x000000 }), hidden = new Map();
+function renderFrame() {
+  // 1) glow pass: everything that isn't a light turns black (sprites hide), so only lights get blurred
+  const bg = scene.background, fog = scene.fog; scene.background = null; scene.fog = null;
+  renderer.shadowMap.autoUpdate = false;
+  scene.traverse(o => {
+    if (glowLayer.test(o.layers)) return;
+    if (o.isSprite || o.isPoints) { hidden.set(o, o.visible); o.visible = false; }
+    else if (o.isMesh) { hidden.set(o, o.material); o.material = blackMat; }
+  });
+  glowComposer.render();
+  for (const [o, v] of hidden) { if (o.isMesh) o.material = v; else o.visible = v; }
+  hidden.clear();
+  scene.background = bg; scene.fog = fog; renderer.shadowMap.autoUpdate = true;
+  // 2) the normal picture, with the glow added on top
+  finalComposer.render();
+}
+function resizeAll() {
+  resize();
+  const pr = renderer.getPixelRatio();
+  glowComposer.setPixelRatio(pr); finalComposer.setPixelRatio(pr);
+  glowComposer.setSize(innerWidth, innerHeight); finalComposer.setSize(innerWidth, innerHeight);
+  paperPass.uniforms.aspect.value = innerWidth / innerHeight;
+}
+addEventListener('resize', resizeAll); resizeAll();
+
+/* ============ loop ============ */
+const clock = new THREE.Clock();
+let spread = 0, moodGlow = 1;
+const roomColor = new THREE.Color(WORLD.table.room), nightColor = new THREE.Color(WORLD.sky);
+const roomSun = new THREE.Color(0xffe2c0), nightSun = new THREE.Color(0xffe9cc);
+const moodSky = new THREE.Color(0xb9c3ff), tmpColor = new THREE.Color();
+renderer.setAnimationLoop(() => {
+  const dt = Math.min(clock.getDelta(), 1 / 20);
+
+  if (anim) {
+    anim.t += dt;
+    f = lerp(anim.from, anim.to, easeSine(clamp(anim.t / anim.dur)));
+    if (anim.t >= anim.dur) { f = anim.to; anim = null; }
+  }
+  updateReading(dt);
+  if (autoplay && autoWait && !anim && performance.now() > autoWait) { autoWait = 0; startReading(); }
+  updateLeaves(dt);
+  updateTrail(dt);
+  updateMagic(dt);
+  updateHint();
+  updateTags();
+
+  const n = leaves.length;
+  leaves.forEach((leaf, i) => {
+    const prog = i < FLIPS ? easeInOut(leafProgress(i, f)) : 0;
+    if ((leaf.theta / Math.PI < .5) !== (prog < .5)) flipSound(prog >= .5);
+    leaf.theta = prog * Math.PI;
+    leaf.group.rotation.z = leaf.theta;
+    leaf.group.position.y = BASE_Y + lerp((n - i) * .006, i * .006 + .006, prog);
+    if (i === 0) { const o = smooth(clamp((prog - .35) / .5)); leftStack.scale.y = Math.max(.001, o); leftStack.visible = o > .01; }
+    bendLeaf(leaf, leaf.theta, dir);
+  });
+
+  // pop-ups rise once their page has nearly landed (back page first, then the cut-outs one by one)
+  for (const pu of popups) {
+    const landed = clamp((leafProgress(pu.k - 1, f) - .5 - pu.delay) / (.5 - pu.delay));
+    const leaving = pu.k < FLIPS ? leafProgress(pu.k, f) : 0;
+    const goal = smooth(landed) * (1 - smooth(clamp(leaving / .2)));
+    const was = pu.a;
+    pu.v += ((goal - pu.a) * pu.stiff - pu.v * pu.damp) * dt; pu.a += pu.v * dt;
+    if (was < .5 && pu.a >= .5 && goal > .5) sfx(WORLD.sfx.popup);
+    pu.a = clamp(pu.a, 0, goal + .06);
+    if (pu.fly) {                                 // flyers lift off the page and grow into the air
+      pu.base ??= pu.hinge.position.y;
+      pu.hinge.position.y = lerp(pu.base, pu.fly, smooth(clamp(pu.a)));
+      pu.hinge.scale.setScalar(Math.max(.001, pu.a));
+    } else if (pu.grow) {
+      pu.hinge.scale.setScalar(Math.max(.001, pu.a));
+    } else pu.hinge.rotation.x = pu.flat * (1 - pu.a) * Math.PI / 2;
+    pu.hinge.visible = pu.a > .01;
+  }
+  // idle loops + actions for the objects on the pages you can see, and the props around the book
+  const time = clock.elapsedTime;
+  for (const o of worldProps) animateObject(o, time, dt);
+
+  // the world spreads out from the book as the cover opens (and folds back away when it closes)
+  const spreadGoal = leafProgress(0, f) > .2 ? 1 : 0;               // ~4.5 s to spread all the way out
+  spread += clamp(spreadGoal - spread, -dt * .22, dt * .22);
+  reveal.value = easeInOut(spread) * 26;
+  doneU.value = smooth(clamp((spread - .85) / .15));                 // the glowing edge fades once it's done
+  updateEdgeSparks(dt, spreadGoal === 1 && spread < .95);
+  // room light (warm, bright) slowly turns into moonlight as the story world takes over
+  const night = smooth(clamp(spread * 1.3));
+  scene.background.lerpColors(roomColor, nightColor, night); scene.fog.color.copy(scene.background);
+  sun.intensity = lerp(2.6, 1.9, night); sun.color.lerpColors(roomSun, nightSun, night);
+  for (const b of worldBits) {
+    const goal = clamp((reveal.value - b.d + .5) / 2);
+    b.v += ((goal - b.a) * 40 - b.v * 6) * dt; b.a += b.v * dt;
+    if (b.fold) b.hinge.rotation.x = -(1 - clamp(b.a, 0, 1.1)) * Math.PI / 2;
+    else b.hinge.scale.setScalar(Math.max(.001, b.a));
+    b.hinge.visible = b.a > .01;
+  }
+  for (const l of fallen) l.m.visible = l.d < reveal.value - .3;
+
+  // mood: the light around the book follows the open page
+  const page = Math.round(f), M = STOPS[page].mood || { sky: 0xb9c3ff, glow: 1 };
+  moodSky.lerp(tmpColor.set(M.sky), Math.min(1, dt * 1.2)); hemi.color.copy(moodSky);
+  moodGlow += (M.glow - moodGlow) * Math.min(1, dt * 1.2);
+  lightLevel += (lightGoal - lightLevel) * Math.min(1, dt * 1.5);
+  const flick = .88 + Math.sin(time * 9) * .06 + Math.sin(time * 23) * .05;
+  candleLights.forEach((L, i) => L.intensity = 4.5 * moodGlow * lightLevel * spread * (flick + Math.sin(time * 7 + i) * .04));
+  for (const { fl, seed } of flames) { const s = (1 + Math.sin(time * 13 + seed) * .12) * (.4 + .6 * lightLevel); fl.scale.set(.22 * s, .32 * s, 1); }
+  hemi.intensity = lerp(1.15, .75 * (.7 + .3 * lightLevel), night);
+  if (night < 1) hemi.color.lerpColors(roomSun, moodSky, night);
+  moodCool += ((M.cool || 0) - moodCool) * Math.min(1, dt * 1.2);
+  sun.color.lerp(coolSun, moodCool * .8 * night); sun.intensity *= lerp(1, .72, moodCool * night);
+  fillLight.intensity = lerp(.55, .95, moodCool) * night;
+  paperPass.uniforms.cool.value = moodCool * night;
+  ground.material.color.lerpColors(groundDry, groundWet, moodCool * night);
+  skyDome.mat.color.lerpColors(skyDome.day, skyDome.grey, moodCool * night); skyDome.capMat.color.copy(skyDome.capDay).lerp(skyDome.grey, moodCool * night);
+  skyDome.m.visible = skyDome.cap.visible = night > .05;
+  updateWorldRain(dt, moodCool * night * spread);
+  updateRainSound(moodCool * night * spread);
+  updateMusic();
+  petals.update(dt, time);
+  if (!anim && target > 0) startEntrances(target);
+  for (let k = Math.max(1, Math.floor(f)); k <= Math.min(FLIPS, Math.ceil(f) + 1); k++) {
+    if (pageObjects[k]) for (const o of Object.values(pageObjects[k])) animateObject(o, time, dt);
+  }
+
+  if (!look.dragging) {
+    look.idle += dt;
+    if (look.reset || look.idle > 3) {
+      const k = Math.min(1, dt * 1.5); look.yaw *= 1 - k; look.pitch *= 1 - k;
+      if (Math.abs(look.yaw) + Math.abs(look.pitch) < .002) look.reset = false;
+    }
+  }
+
+  cameraTarget();
+  // a soft spring: the camera starts slowly, glides, and settles (no sudden jump at the start of a move)
+  const rate = look.dragging ? 6 : (focus ? focus.rate : 1.6) * CAMERA_SPEED;
+  const w = rate * 1.6;
+  for (const [cur, goal, vel] of [[rig.cur, rig.pos, rig.vel], [rig.curLook, rig.look, rig.velLook]]) {
+    vel.addScaledVector(tmpA.copy(goal).sub(cur), w * w * dt).multiplyScalar(Math.max(0, 1 - 2 * w * dt));
+    cur.addScaledVector(vel, dt);
+  }
+  camera.position.copy(rig.cur); camera.lookAt(rig.curLook);
+
+  fill.style.transform = `scaleY(${f / FLIPS})`;
+  dots.forEach((d, i) => d.classList.toggle('on', i <= Math.round(f)));
+  showCard(anim ? Math.round(f) : target);
+  pval.textContent = `p = ${(f / FLIPS).toFixed(2)}`;
+  if (f > .05) hint.style.opacity = 0;
+
+  renderFrame();
+});
+</script>
+</body>
+</html>
